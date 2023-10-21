@@ -9,9 +9,7 @@
  //namespace haduloha\ExportFamilyBook;
  include 'moduleExport.php';
 
-//use Aura\Router\RouterContainer;
-//use Exception;
-//use Fig\Http\Message\RequestMethodInterface;
+
 use Fisharebest\Webtrees\Webtrees;
 use Fisharebest\Webtrees\Auth;
 use Fisharebest\Webtrees\Registry;
