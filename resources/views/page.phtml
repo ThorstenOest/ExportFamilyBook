@@ -1,0 +1,30 @@
+<?php
+
+use Fisharebest\Webtrees\I18N;
+use Fisharebest\Webtrees\Functions\FunctionsPrint;
+
+?>
+<h1><?= $title ?></h1>
+<p>
+    <!-- Add a a from to change the export type, either as a book or as a graph -->
+<form action='<?= $module->chartUrl($individual, ['export_book' => !$export_book]) ?>' 
+method='post' style="display: inline-block; vertical-align: top; margin-right: 20px;">
+    <?= csrf_field() ?> <!-- add a csrf token, needed to run the code -->
+    <button type="submit" name="mod_action" value="change_export_type"><?= I18N::translate('Change export type')?></button>
+</form>
+<button type="submit" name="mod_action" value="help" style="display: inline-block; vertical-align: top;"><?= I18N::translate('Help') ?></button>
+</p>
+
+<?php
+
+// get the help text for individuals and families
+//$help_text = addslashes($module->getHelpText("latex"));
+
+// -------------------------------------------------------------------------------
+// read the input data from the file export_latex_settings.txt resp. export_graphml_settings.txt
+if ($export_book) {
+    $module->setParameterLatex($settings, $tree, $individual);
+} else {
+    $module->setParameterGraphml($settings, $tree, $individual);
+}
+?>
