@@ -1730,6 +1730,9 @@ class ExportFamilyBookData extends AbstractModule
                             break;
                         case "ForeachMedia":
                             // loop over media files
+                            if ($record->xref() == "I4443") {
+                                $id1 = $record->xref();
+                            };
                             $media_links = [];
                             foreach ($record->facts(["OBJE"], true) as $fact) {
                                 // get the media object and add it to the array
@@ -1774,7 +1777,7 @@ class ExportFamilyBookData extends AbstractModule
 
                                     if ($media_record !== null) {
 
-                                        // check agaist the inclusion and exclusion list
+                                        // check against the inclusion and exclusion list
                                         if (in_array($id, $this->include_exclude_media["include"])) {
                                             $use = true;
                                         } else if (in_array($id, $this->include_exclude_media["exclude"])) {
@@ -1799,8 +1802,8 @@ class ExportFamilyBookData extends AbstractModule
                                                 $usefile = true;
                                                 // check if type is in format[0]
                                                 if ($this->get_format($format, 0) != "") {
-                                                    $types = explode(',', $this->get_format($format, 0));
-                                                    $type = $file->type();
+                                                    $types = array_map("strtolower",explode(',', $this->get_format($format, 0)));
+                                                    $type = strtolower($file->type());
                                                     if (!in_array($type, $types)) {
                                                         $usefile = false;
                                                     }

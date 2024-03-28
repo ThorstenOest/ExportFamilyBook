@@ -2,8 +2,24 @@
 
 use Fisharebest\Webtrees\I18N;
 use Fisharebest\Webtrees\Functions\FunctionsPrint;
-
+$current_directory = dirname(__FILE__);
+$html_help_content = file_get_contents($current_directory . '\page_help.html');
+$escaped_help_content = json_encode($html_help_content);
 ?>
+<!---  Popup window with help -->
+<script type="text/javascript">
+        function openPopup() {
+            // creates a Popup Window.
+            var popupWindow = window.open('', 'Help', 'width=600,height=400');
+
+            // add content to window
+            popupWindow.document.write(<?php echo $escaped_help_content; ?>);
+ 
+            // open Popup window
+            popupWindow.document.close();
+        }
+</script>
+
 <h1><?= $title ?></h1>
 <p>
     <!-- Add a a from to change the export type, either as a book or as a graph -->
@@ -12,13 +28,13 @@ method='post' style="display: inline-block; vertical-align: top; margin-right: 2
     <?= csrf_field() ?> <!-- add a csrf token, needed to run the code -->
     <button type="submit" name="mod_action" value="change_export_type"><?= I18N::translate('Change export type')?></button>
 </form>
-<button type="submit" name="mod_action" value="help" style="display: inline-block; vertical-align: top;"><?= I18N::translate('Help') ?></button>
+
+<button onclick="openPopup()"><?= I18N::translate('Open Help Window')?></button>
+
+<!--- <button type="submit" name="mod_action" value="help" style="display: inline-block; vertical-align: top;"><?= I18N::translate('Help') ?></button> -->
 </p>
 
 <?php
-
-// get the help text for individuals and families
-//$help_text = addslashes($module->getHelpText("latex"));
 
 // -------------------------------------------------------------------------------
 // read the input data from the file export_latex_settings.txt resp. export_graphml_settings.txt
