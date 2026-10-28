@@ -22,6 +22,7 @@ use Fisharebest\Webtrees\Module\ModuleChartTrait;
 use Fisharebest\Webtrees\Menu;
 use Fisharebest\Webtrees\View;
 use Fisharebest\Webtrees\Tree;
+use Fisharebest\Webtrees\Validator;
 //use Fisharebest\Webtrees\Webtrees;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -129,6 +130,17 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
     }
 
     /**
+     * Enforce the access level set in Control panel > Modules > Charts.
+     * webtrees only hides the menu entry; the module's actions must check it themselves.
+     * Throws HttpAccessDeniedException if the current user may not use this chart.
+     */
+    private function checkAccess(ServerRequestInterface $request, Tree $tree): void
+    {
+        $user = Validator::attributes($request)->user();
+        Auth::checkComponentAccess($this, ModuleChartInterface::class, $tree, $user);
+    }
+
+    /**
      * This function is called when the menu chart-button is hit to open the export definition page or when the "Change export type" button on the definition page is hit calling $module->chartUrl.
      *
      * @param Individual $individual
@@ -140,6 +152,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         $tree = $request->getAttribute('tree');
         assert($tree instanceof Tree);
+        $this->checkAccess($request, $tree);
         $individual = $this->getIndividual($tree, $request->getQueryParams()['xref']);
         $queryParams = $request->getQueryParams();
 
@@ -182,6 +195,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
     {
         $tree = $request->getAttribute('tree');
         assert($tree instanceof Tree);
+        $this->checkAccess($request, $tree);
         //$individual = $this->getIndividual($tree, $request->getQueryParams()['xref']);
 
         $parsedBodys = $request->getParsedBody();
