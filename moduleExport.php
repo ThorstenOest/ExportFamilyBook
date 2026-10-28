@@ -17,7 +17,7 @@ use Fisharebest\Webtrees\I18N;
 use Fisharebest\Webtrees\Individual;
 use Fisharebest\Webtrees\Date;
 use Fisharebest\Webtrees\Module\AbstractModule;
-use Illuminate\Database\Capsule\Manager as DB;
+use Fisharebest\Webtrees\DB;
 use Illuminate\Database\Query\Expression;
 use Fisharebest\Webtrees\GedcomRecord;
 use Fisharebest\Webtrees\Media;
@@ -34,10 +34,6 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Illuminate\Support\Collection;
 
-use Fisharebest\Webtrees\Functions\FunctionsCharts;
-use Fisharebest\Webtrees\Functions\FunctionsEdit;
-use Fisharebest\Webtrees\Functions\FunctionsPrint;
-use Fisharebest\Webtrees\Functions\FunctionsPrintLists;
 //use Psr\Http\Message\ResponseFactoryInterface;
 //use Psr\Http\Message\StreamFactoryInterface;
 
@@ -536,7 +532,7 @@ class ExportFamilyBookData extends AbstractModule
      *
      * @return String
      */
-    private function getGEDCOMTagLabel(string $tag, string $record_type = null)
+    private function getGEDCOMTagLabel(string $tag, ?string $record_type = null)
     {
         if (!is_null($record_type)) $tag = $record_type . ':' . $tag;
         $element = Registry::elementFactory()->make($tag);
@@ -1506,7 +1502,7 @@ class ExportFamilyBookData extends AbstractModule
                             $tag_replacement = preg_replace(
                                 "/\\n/",
                                 "<br>",
-                                $record->getGedcom()
+                                $record->gedcom()
                             );
                             $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
                             break;
@@ -2145,7 +2141,6 @@ class ExportFamilyBookData extends AbstractModule
                             ),
                             "reference" => $reference,
                             "ancestor" => '',
-                            "sub_branch" => '',
                             "xref" => $xrefInd
                         );
                     } else {
@@ -2302,7 +2297,7 @@ class ExportFamilyBookData extends AbstractModule
                 $cols = explode($sep1, $row);
                 if (sizeof($cols) > 1) {
                     if (sizeof($cols) > sizeof($seeds_default) || sizeof($cols) < 3) {
-                        exit("seed has too many of too few columns" . $cols);
+                        throw new RuntimeException("Seed has too many or too few columns: " . $row);
                     }
 
                     $seeds[] = $seeds_default;

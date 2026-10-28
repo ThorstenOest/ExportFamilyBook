@@ -6,7 +6,7 @@
  */
 
 //namespace haduloha\ExportFamilyBook;
-include 'moduleExport.php';
+require_once __DIR__ . '/moduleExport.php';
 
 
 use Fisharebest\Webtrees\Webtrees;
@@ -27,11 +27,6 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\StreamFactoryInterface;
-
-use Fisharebest\Webtrees\Functions\FunctionsCharts;
-use Fisharebest\Webtrees\Functions\FunctionsEdit;
-use Fisharebest\Webtrees\Functions\FunctionsPrint;
-use Fisharebest\Webtrees\Functions\FunctionsPrintLists;
 
 /**
  * Main class for FamilyBookExport module
@@ -140,7 +135,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
      *
      * @return Menu|null
      */
-    public function getChartAction(ServerRequestInterface $request, array $settings = NULL): ResponseInterface
+    public function getChartAction(ServerRequestInterface $request, ?array $settings = null): ResponseInterface
     {
 
         $tree = $request->getAttribute('tree');
@@ -245,7 +240,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 $serialized_post = serialize($_POST);
                 $encoded_post = base64_encode($serialized_post);
 
-                $stream   = $this->stream_factory->createStreamFromResource($encoded_post);
+                $stream   = $this->stream_factory->createStream($encoded_post);
                 $response = $this->response_factory->createResponse()
                     ->withBody($stream)
                     ->withHeader('content-type', 'text/plain; charset=UTF-8')
@@ -292,8 +287,11 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                     // Decode the base64 encoded data
                     $decoded_data = base64_decode($file_content);
 
-                    // Unserialize the data
-                    $unserialized_data = unserialize($decoded_data);
+                    // Unserialize the data; objects are never allowed (protection against object injection)
+                    $unserialized_data = unserialize($decoded_data, ['allowed_classes' => false]);
+                    if (!is_array($unserialized_data)) {
+                        $unserialized_data = null;
+                    }
 
                     // Now you can work with $unserialized_data
                     $settings = $unserialized_data;
@@ -302,32 +300,8 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 $response = $this->getChartAction($request, $settings);
                 break;
             case "change_export_type":
+            default:
                 $response = $this->getChartAction($request, $settings);
-                break;
-            case "help":
-                // set the export_book variable according to the get-parameter 'export_book'
-                if (array_key_exists('export_book', $queryParams)) {
-                    $export_book = $queryParams['export_book'];
-                } else {
-                    $export_book = true;
-                };
-
-                // set the page_title variable according to the get-parameter 'export_book'
-                if ($export_book) {
-                    $page_title = 'Export Family Book';
-                } else {
-                    $page_title = 'Export GraphML';
-                };
-
-                // open resources\views\page.phtml and pass parameter to the page
-                $response = $this->viewResponse($this->name() . '::page', [
-                    'tree' => $tree,
-                    'individual' => $individual,
-                    'title' => $page_title,
-                    'module' => $this,
-                    'export_book' => $export_book,
-                    'settings' => $settings
-                ]);
                 break;
         }
 
@@ -587,7 +561,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
      * @param array $settings
      *        	The setting in the form
      */
-    public function setParameterGraphml($settings = NULL, $tree, $individual)
+    public function setParameterGraphml(?array $settings, Tree $tree, Individual $individual)
     {
 
         // fill read settings if not passed
@@ -597,7 +571,8 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             if (file_exists($file_path_and_name)) {
                 $myfile = fopen($file_path_and_name, "r");
                 $settings = fread($myfile, filesize($file_path_and_name));
-                $settings = unserialize(base64_decode($settings));
+                $settings = unserialize(base64_decode($settings), ['allowed_classes' => false]);
+                if (!is_array($settings)) $settings = array();
             } else {
                 $settings = array();
             }
@@ -1043,7 +1018,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
      * @param array $settings
      *        	The setting in the form
      */
-    public function setParameterLatex($settings = NULL, $tree, $individual)
+    public function setParameterLatex(?array $settings, Tree $tree, Individual $individual)
     {
         $help_text = addslashes($this->getHelpText("latex"));
 
@@ -1054,7 +1029,8 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             if (file_exists($file_path_and_name)) {
                 $myfile = fopen($file_path_and_name, "r");
                 $settings = fread($myfile, filesize($file_path_and_name));
-                $settings = unserialize(base64_decode($settings));
+                $settings = unserialize(base64_decode($settings), ['allowed_classes' => false]);
+                if (!is_array($settings)) $settings = array();
             } else {
                 $settings = array();
             }
@@ -1374,6 +1350,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 }
 
 return new ExportFamilyBook(
-    Webtrees::make(ResponseFactoryInterface::class),
-    Webtrees::make(StreamFactoryInterface::class)
+    Registry::container()->get(ResponseFactoryInterface::class),
+    Registry::container()->get(StreamFactoryInterface::class)
 );
