@@ -2,7 +2,7 @@
 
 use Fisharebest\Webtrees\I18N;
 $html_help_content = file_get_contents(__DIR__ . '/page_help.html');
-$escaped_help_content = json_encode($html_help_content);
+$escaped_help_content = json_encode($html_help_content, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
 ?>
 <!---  Popup window with help -->
 <script type="text/javascript">
@@ -18,10 +18,10 @@ $escaped_help_content = json_encode($html_help_content);
         }
 </script>
 
-<h1><?= $title ?></h1>
+<h1><?= e($title) ?></h1>
 <p>
     <!-- Add a a from to change the export type, either as a book or as a graph -->
-<form action='<?= $module->chartUrl($individual, ['export_book' => !$export_book]) ?>' 
+<form action='<?= e($module->chartUrl($individual, ['export_book' => !$export_book])) ?>' 
 method='post' style="display: inline-block; vertical-align: top; margin-right: 20px;">
     <?= csrf_field() ?> <!-- add a csrf token, needed to run the code -->
     <button type="submit" name="mod_action" value="change_export_type"><?= I18N::translate('Change export type')?></button>
