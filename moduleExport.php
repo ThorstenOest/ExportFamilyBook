@@ -750,8 +750,8 @@ class ExportFamilyBookData extends AbstractModule
                         $pos_end = $pos_bracket_end;
                         $i++;
                     } else {
-                        exit("No right bracket found for left bracket at position " . $pos_bracket .
-                            " for template: " . $template);
+                        exit(e("No right bracket found for left bracket at position " . $pos_bracket .
+                            " for template: " . $template));
                         $pos_end = strlen($template);
                     }
                 } elseif ($pos !== false) {
@@ -830,7 +830,7 @@ class ExportFamilyBookData extends AbstractModule
                             } else {
                                 // Foreach end found
                                 $pos_end = strlen($template);
-                                exit("No EndForeach tag found in tempalte for " . $component);
+                                exit(e("No EndForeach tag found in tempalte for " . $component));
                             }
                         } else {
                             // this is a single tag
@@ -1592,7 +1592,7 @@ class ExportFamilyBookData extends AbstractModule
                             $n = count($filename_array);
                             if ($n == 1) {
                                 // file name has no ending stop code
-                                exit('Image name \'' . $filename . "\' does not have an ending");
+                                exit(e('Image name \'' . $filename . "\' does not have an ending"));
                             } else if ($this->get_format($format, 0) == "NoExtension") {
                                 // return file name without ending	 
                                 $tag_replacement .= implode(".", array_slice($filename_array, 0, $n - 1));
@@ -1727,7 +1727,7 @@ class ExportFamilyBookData extends AbstractModule
                             }
                             break;
                         default:
-                            exit("Tag " . $comp["component"] . " in template not defined");
+                            exit(e("Tag " . $comp["component"] . " in template not defined"));
                     }
                 } elseif ($comp["type"] == "foreach") {
                     // loop
@@ -2040,7 +2040,7 @@ class ExportFamilyBookData extends AbstractModule
                             }
                             break;
                         default:
-                            exit("Tag " . $comp["component"] . " in template not defined");
+                            exit(e("Tag " . $comp["component"] . " in template not defined"));
                     }
                 }
                 //
@@ -2475,7 +2475,7 @@ class ExportFamilyBookData extends AbstractModule
                             } elseif (strtolower($cols[$i]) === "include") {
                                 $seeds[$key][$seeds_default_keys[$i]] = TRUE;
                             } else {
-                                exit("wrong value in seed column 6 value = " . $cols[$i]);
+                                exit(e("wrong value in seed column 6 value = " . $cols[$i]));
                             }
                         } else {
                             $seeds[$key][$seeds_default_keys[$i]] = $cols[$i];
@@ -2485,7 +2485,7 @@ class ExportFamilyBookData extends AbstractModule
                     // apply some checks
                     foreach (array_keys($allowed_values) as $allowed_key) {
                         if (!in_array($seeds[$key][$allowed_key], $allowed_values[$allowed_key])) {
-                            exit("wrong value in seed column " . $allowed_key);
+                            exit(e("wrong value in seed column " . $allowed_key));
                         }
                     }
                 }
@@ -2724,7 +2724,7 @@ class ExportFamilyBookData extends AbstractModule
                         $this->generationInd[$xref]["children"]
                     );
                 } else {
-                    exit('Wrong seed type for ' .  $seed["name"]);
+                    exit(e('Wrong seed type for ' .  $seed["name"]));
                 }
 
                 do {

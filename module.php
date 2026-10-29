@@ -567,6 +567,21 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
 
     /**
+     * Wrap a help text into a JavaScript string literal for document.write()
+     *
+     * The literal contains no quotes, ampersands or angle brackets, so it can be
+     * placed into an HTML attribute (after e()) or a script block.
+     *
+     * @param string $help_text
+     * @return string
+     */
+    public function helpScript(string $help_text): string
+    {
+        return json_encode('<html>' . $help_text . '</html>', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+    }
+
+
+    /**
      * Generate a form to define the graphml format
      *
      * This function generates a form to define the export parameter
@@ -594,7 +609,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         // header
         echo '<div id="reportengine-page">
-            <form action=\'' . $this->chartUrl($individual, ['export_book' => false]) . '\' name="setupreport" enctype="multipart/form-data" method="post">',
+            <form action=\'' . e($this->chartUrl($individual, ['export_book' => false])) . '\' name="setupreport" enctype="multipart/form-data" method="post">',
         csrf_field();
 
         echo '<table class="facts_table width50">
@@ -620,7 +635,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             echo '<td class="optionbox" colspan="2">',  I18N::translate('symbol for'), ' ',
             I18N::translate($n), "\n";
             echo '<input type="text" size="15" value="' .
-                (array_key_exists($name, $settings) ? $settings[$name] : "") .
+                e(array_key_exists($name, $settings) ? $settings[$name] : "") .
                 '" name="' . $name . '"></td>';
             if ($n == "mother" or $n == "husband") echo '</tr><tr>';
         };
@@ -637,11 +652,11 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         foreach (array(
             "individuals", "families"
         ) as $s1) {
-            $help_text = addslashes($this->getHelpText($s1));
+            $help_text = $this->helpScript($this->getHelpText($s1));
             echo '<tr><td class="descriptionbox width30 wrap" colspan="5">', I18N::translate(
                 'Template for ' . $s1
             );
-            echo '<span class="wt-icon-help" onclick="javascript:open(\'\', \'Help window\', \'height=600,width=800,resizable=yes\').document.write(\'<html>' . $help_text . '</html>\')"></span>';
+            echo '<span class="wt-icon-help" onclick="javascript:open(\'\', \'Help window\', \'height=600,width=800,resizable=yes\').document.write(' . e($help_text) . ')"></span>';
             echo '</td></tr>';
 
             foreach (array(
@@ -657,7 +672,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
                 echo '<td class="optionbox" colspan="4">' . '<textarea rows="' .
                     $nrow . '" cols="100" name="' . $name . '">';
-                echo $s;
+                echo e($s);
                 echo '</textarea></td></tr>';
             }
         }
@@ -682,7 +697,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         echo '<td class="optionbox" colspan="6">' . '<textarea rows="' . $nrow .
             '" cols="100" name="' . $name . '">';
-        echo $s;
+        echo e($s);
         echo '</textarea></td></tr>';
 
         /*
@@ -765,19 +780,19 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 		 */
         echo '<tr><td class="optionbox" colspan="1">' .
             I18N::translate('Fill color') . '<input type="color" value="' .
-            (array_key_exists("color_male", $settings) ? $settings["color_male"] : "#ccccff") .
+            e(array_key_exists("color_male", $settings) ? $settings["color_male"] : "#ccccff") .
             '" name="color_male"></td>';
         echo '<td class="optionbox" colspan="1">' .
             I18N::translate('Fill color') . '<input type="color" value="' .
-            (array_key_exists("color_female", $settings) ? $settings["color_female"] : "#ffcccc") .
+            e(array_key_exists("color_female", $settings) ? $settings["color_female"] : "#ffcccc") .
             '" name="color_female"></td>';
         echo '<td class="optionbox" colspan="1">' .
             I18N::translate('Fill color') . '<input type="color" value="' .
-            (array_key_exists("color_unknown", $settings) ? $settings["color_unknown"] : "#ffffff") .
+            e(array_key_exists("color_unknown", $settings) ? $settings["color_unknown"] : "#ffffff") .
             '" name="color_unknown"></td>';
         echo '<td class="optionbox" colspan="1">' .
             I18N::translate('Fill color') . '<input type="color" value="' .
-            (array_key_exists("color_family", $settings) ? $settings["color_family"] : "#ffffff") .
+            e(array_key_exists("color_family", $settings) ? $settings["color_family"] : "#ffffff") .
             '" name="color_family"></td></tr>';
 
         /*
@@ -793,7 +808,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             echo '<td class="optionbox" colspan="1">' .
                 I18N::translate('Border color') .
                 '<input type="color" value="' .
-                (array_key_exists($name, $settings) ? $settings[$name] : "#ffffff") .
+                e(array_key_exists($name, $settings) ? $settings[$name] : "#ffffff") .
                 '" name="' . $name . '"></td>';
         }
         foreach (array(
@@ -803,7 +818,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             echo '<td class="optionbox" colspan="1">' .
                 I18N::translate('Border color') .
                 '<input type="color" value="' .
-                (array_key_exists($name, $settings) ? $settings[$name] : "#ffffff") .
+                e(array_key_exists($name, $settings) ? $settings[$name] : "#ffffff") .
                 '" name="' . $name . '"></td>';
         }
         echo '</tr>';
@@ -821,14 +836,14 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             echo '<td class="optionbox" colspan="1">' .
                 I18N::translate('Box width') .
                 '<input type="number" value="' .
-                (array_key_exists($name, $settings) ? $settings[$name] : "120") .
+                e(array_key_exists($name, $settings) ? $settings[$name] : "120") .
                 '" name="' . $name . '"></td>';
         }
         $name = "box_width_family";
         echo '<td class="optionbox" colspan="1">' . I18N::translate('Symbol') .
             " " . I18N::translate('width') . "/" .
             I18N::translate('height') . '<input type="number" value="' .
-            (array_key_exists($name, $settings) ? $settings[$name] : "120") .
+            e(array_key_exists($name, $settings) ? $settings[$name] : "120") .
             '" name="' . $name . '"></td></tr>';
 
         /*
@@ -844,7 +859,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             echo '<td class="optionbox" colspan="1">' .
                 I18N::translate('Border width') .
                 '<input type="number" value="' .
-                (array_key_exists($name, $settings) ? $settings[$name] : "1") .
+                e(array_key_exists($name, $settings) ? $settings[$name] : "1") .
                 '" step="0.1" name="' . $name . '"></td>';
         }
         echo '</tr>';
@@ -862,7 +877,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             echo '<td class="optionbox" colspan="1">' .
                 I18N::translate('Font size') .
                 '<input type="number" value="' .
-                (array_key_exists($name, $settings) ? $settings[$name] : "10") .
+                e(array_key_exists($name, $settings) ? $settings[$name] : "10") .
                 '" step="1" name="' . $name . '"></td>';
         }
         echo '</tr>';
@@ -881,7 +896,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             $name = "default_portrait_" . $s;
             echo '<td class="optionbox" colspan="1">
 					<input type="text" size="30" value="' .
-                (array_key_exists($name, $settings) ? $settings[$name] : "") .
+                e(array_key_exists($name, $settings) ? $settings[$name] : "") .
                 '" name="' . $name . '"></td>';
         }
 
@@ -928,7 +943,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             'Line width of edge'
         ), '</td><td class="optionbox" colspan="4">
 			<input type="number" value="' .
-            (array_key_exists("edge_line_width", $settings) ? $settings["edge_line_width"] : "1") .
+            e(array_key_exists("edge_line_width", $settings) ? $settings["edge_line_width"] : "1") .
             '" step="0.1" name="edge_line_width" min="1" max="7"></td></tr>';
 
         /*
@@ -952,12 +967,12 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         echo '</select></td>';
         echo '</td><td class="optionbox" colspan="1">
 			<input type="number" value="' .
-            (array_key_exists("border_width_link", $settings) ? $settings["border_width_link"] : "1") .
+            e(array_key_exists("border_width_link", $settings) ? $settings["border_width_link"] : "1") .
             '" step="0.1" name="border_width_link" min="1" max="7"></td>';
         $name = "border_link_color";
         echo '<td class="optionbox" colspan="2">' .
             '<input type="color" value="' .
-            (array_key_exists($name, $settings) ? $settings[$name] : "#ffffff") .
+            e(array_key_exists($name, $settings) ? $settings[$name] : "#ffffff") .
             '" name="' . $name . '"></td></tr>';
 
 
@@ -994,7 +1009,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         //echo '<form name="upload" enctype="multipart/form-data" method="POST" 
         //		action="module.php?mod=' . $this->getName () .
         //		 '&mod_action=upload_settings_graphml">';
-        echo '<form action=\'' . $this->chartUrl($individual, ['export_book' => false]) . '\' name="upload" enctype="multipart/form-data" method="post">',
+        echo '<form action=\'' . e($this->chartUrl($individual, ['export_book' => false])) . '\' name="upload" enctype="multipart/form-data" method="post">',
         csrf_field();
 
         //echo '<form name="upload" enctype="multipart/form-data" method="POST" 
@@ -1034,7 +1049,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
      */
     public function setParameterLatex(?array $settings, Tree $tree, Individual $individual)
     {
-        $help_text = addslashes($this->getHelpText("latex"));
+        $help_text = $this->helpScript($this->getHelpText("latex"));
 
         // fill read settings if not passed
         if (is_null($settings)) {
@@ -1052,7 +1067,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         // header line 
         echo '<div id="reportengine-page">
-				<form action=\'' . $this->chartUrl($individual, ['export_book' => true]) . '\' name="setupreport" enctype="multipart/form-data" method="post">',
+				<form action=\'' . e($this->chartUrl($individual, ['export_book' => true])) . '\' name="setupreport" enctype="multipart/form-data" method="post">',
         csrf_field();
 
         echo '<table class="facts_table width50">
@@ -1083,7 +1098,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             echo '<td class="optionbox" colspan="2">',  I18N::translate('symbol for'), ' ',
             I18N::translate($n), "\n";
             echo '<input type="text" size="15" value="' .
-                (array_key_exists($name, $settings) ? $settings[$name] : "") .
+                e(array_key_exists($name, $settings) ? $settings[$name] : "") .
                 '" name="' . $name . '"></td>';
             if ($n == "mother" or $n == "husband") echo '</tr><tr>';
         };
@@ -1106,7 +1121,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         echo '<td class="optionbox" colspan="6">' . '<textarea rows="' . $nrow .
             '" cols="100" name="' . $name . '">';
-        echo $s;
+        echo e($s);
         echo '</textarea></td></tr>';
 
         /*
@@ -1126,7 +1141,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         echo '<td class="optionbox" colspan="6">' . '<textarea rows="' . $nrow .
             '" cols="100" name="' . $name . '">';
-        echo $s;
+        echo e($s);
         echo '</textarea></td></tr>';
 
         /*
@@ -1137,7 +1152,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             'Template for individuals'
         );
 
-        echo '<span class="wt-icon-help" onclick="javascript:open(\'\', \'Help window\', \'height=600,width=800,resizable=yes\').document.write(\'<html>' . $help_text . '</html>\')"></span>';
+        echo '<span class="wt-icon-help" onclick="javascript:open(\'\', \'Help window\', \'height=600,width=800,resizable=yes\').document.write(' . e($help_text) . ')"></span>';
 
         // Node text
         echo  '</td></tr><tr><td class="descriptionbox width30 wrap">', I18N::translate(
@@ -1151,7 +1166,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         echo '<td class="optionbox" colspan="6">' . '<textarea rows="' .
             $nrow . '" cols="100" name="' . $name . '">';
-        echo $s;
+        echo e($s);
         echo '</textarea></td></tr>';
 
         // Node text
@@ -1166,7 +1181,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         echo '<td class="optionbox" colspan="6">' . '<textarea rows="' .
             $nrow . '" cols="100" name="' . $name . '">';
-        echo $s;
+        echo e($s);
         echo '</textarea></td></tr>';
 
         /*
@@ -1187,7 +1202,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         echo '<td class="optionbox" colspan="6">' . '<textarea rows="' . $nrow .
             '" cols="100" name="' . $name . '">';
-        echo $s;
+        echo e($s);
         echo '</textarea></td></tr>';
 
         /*
@@ -1208,7 +1223,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         echo '<td class="optionbox" colspan="6">' . '<textarea rows="' . $nrow .
             '" cols="100" name="' . $name . '">';
-        echo $s;
+        echo e($s);
         echo '</textarea></td></tr>';
 
         /*
@@ -1229,7 +1244,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         echo '<td class="optionbox" colspan="6">' . '<textarea rows="' . $nrow .
             '" cols="100" name="' . $name . '">';
-        echo $s;
+        echo e($s);
         echo '</textarea></td></tr>';
 
         /*
@@ -1247,7 +1262,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         $nrow = min(2, substr_count($s, "\n") + 1);
         echo '<td class="optionbox" colspan="6">' . '<textarea rows="' . $nrow .
             '" cols="100" name="' . $name . '">';
-        echo $s;
+        echo e($s);
         echo '</textarea></td></tr>';
 
         echo '<tr><td class="descriptionbox width30 wrap">', I18N::translate(
@@ -1258,7 +1273,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         $nrow = min(2, substr_count($s, "\n") + 1);
         echo '<td class="optionbox" colspan="6">' . '<textarea rows="' . $nrow .
             '" cols="100" name="' . $name . '">';
-        echo $s;
+        echo e($s);
         echo '</textarea></td></tr>';
 
         /*
@@ -1279,7 +1294,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             $name = 'default_' . $s . '_format';
             echo '<td class="optionbox" colspan="6">
 				<input type="text" size="30" value="' .
-                (array_key_exists($name, $settings) ? $settings[$name] : "") .
+                e(array_key_exists($name, $settings) ? $settings[$name] : "") .
                 '" name="' . $name . '"></td></tr>';
         }
 
@@ -1301,7 +1316,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             $name = 'hierarchy_' . $s;
             echo '<td class="optionbox" colspan="6">
 				<input type="text" size="30" value="' .
-                (array_key_exists($name, $settings) ? $settings[$name] : "") .
+                e(array_key_exists($name, $settings) ? $settings[$name] : "") .
                 '" name="' . $name . '"></td></tr>';
         }
 
@@ -1344,7 +1359,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             'Upload/Download Settings'
         ), '</td></tr>';
         // header line of the form
-        echo '<form action=\'' . $this->chartUrl($individual, ['export_book' => true]) . '\' name="upload" enctype="multipart/form-data" method="post">',
+        echo '<form action=\'' . e($this->chartUrl($individual, ['export_book' => true])) . '\' name="upload" enctype="multipart/form-data" method="post">',
         csrf_field();
 
         //echo '<form name="upload" enctype="multipart/form-data" method="POST" 
