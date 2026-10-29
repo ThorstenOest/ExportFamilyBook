@@ -11,6 +11,7 @@ require_once __DIR__ . '/moduleExport.php';
 
 use Fisharebest\Webtrees\Webtrees;
 use Fisharebest\Webtrees\Auth;
+use Fisharebest\Webtrees\FlashMessages;
 use Fisharebest\Webtrees\Registry;
 use Fisharebest\Webtrees\I18N;
 use Fisharebest\Webtrees\Individual;
@@ -42,6 +43,31 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
     private StreamFactoryInterface $stream_factory;
 
     private $tree = null;
+
+    // Format of the settings files
+    private const SETTINGS_FORMAT = 'ExportFamilyBook-settings';
+    private const SETTINGS_VERSION = 1;
+
+    // Setting fields of the forms per export type (without the reference individual and symbols)
+    private const SETTINGS_FIELDS = array(
+        'latex' => array(
+            'preamble', 'title', 'individuals_summary_label_template', 'individuals_label_template', 'epilog',
+            'branch_seeds', 'symbols', 'include_media', 'exclude_media', 'default_date_format',
+            'default_place_format', 'hierarchy_branch', 'hierarchy_sub_branch', 'hierarchy_generation',
+        ),
+        'graphml' => array(
+            'individuals_label_template', 'individuals_description_template', 'families_label_template',
+            'families_description_template', 'branch_seeds',
+            'node_style_male', 'node_style_female', 'node_style_unknown', 'node_style_family',
+            'color_male', 'color_female', 'color_unknown', 'color_family',
+            'border_male', 'border_female', 'border_unknown', 'border_family',
+            'box_width_male', 'box_width_female', 'box_width_unknown', 'box_width_family',
+            'border_width_male', 'border_width_female', 'border_width_unknown', 'border_width_family',
+            'font_size_male', 'font_size_female', 'font_size_unknown', 'font_size_family',
+            'default_portrait_male', 'default_portrait_female', 'default_portrait_unknown',
+            'font', 'edge_line_width', 'node_style_link', 'border_width_link', 'border_link_color',
+        ),
+    );
 
     /**
      * @param ResponseFactoryInterface $response_factory
@@ -246,18 +272,14 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 break;
             case "download_settings_graphml":
             case "download_settings_latex":
-                // download the formula data into a local file
-                // file name is set to the tree name
-                $download_filename = ($mod_action == 'download_settings_graphml') ? "export_graphml_settings.txt" : "export_latex_settings.txt";
+                // download the formula data into a local file (JSON, only the setting fields of the form)
+                $export_type = ($mod_action == 'download_settings_graphml') ? 'graphml' : 'latex';
+                $download_filename = "export_{$export_type}_settings.json";
 
-                // Write parameter (base64 encoded serialized POST data)
-                $serialized_post = serialize($_POST);
-                $encoded_post = base64_encode($serialized_post);
-
-                $stream   = $this->stream_factory->createStream($encoded_post);
+                $stream   = $this->stream_factory->createStream($this->encodeSettings($export_type, $_POST));
                 $response = $this->response_factory->createResponse()
                     ->withBody($stream)
-                    ->withHeader('content-type', 'text/plain; charset=UTF-8')
+                    ->withHeader('content-type', 'application/json; charset=UTF-8')
                     ->withHeader('content-disposition', 'attachment; filename="' . $download_filename . '"');
                 /*
                 header('Content-Type: text/plain; charset=UTF-8');
@@ -292,23 +314,13 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 if ($_FILES['uploadedfile']['error'] === UPLOAD_ERR_OK) {
                     $uploaded_file = $_FILES['uploadedfile']['tmp_name'];
 
-                    // Read the content of the uploaded file
-                    $file_content = file_get_contents($uploaded_file);
-
-                    // Remove the Byte Order Mark if present
-                    $file_content = preg_replace('/^\xEF\xBB\xBF/', '', $file_content);
-
-                    // Decode the base64 encoded data
-                    $decoded_data = base64_decode($file_content);
-
-                    // Unserialize the data; objects are never allowed (protection against object injection)
-                    $unserialized_data = unserialize($decoded_data, ['allowed_classes' => false]);
-                    if (!is_array($unserialized_data)) {
-                        $unserialized_data = null;
+                    // Read the content of the uploaded file (JSON or the old base64/serialize format)
+                    $export_type = ($mod_action == 'upload_settings_graphml') ? 'graphml' : 'latex';
+                    try {
+                        $settings = $this->decodeSettings($export_type, (string) file_get_contents($uploaded_file));
+                    } catch (UnexpectedValueException $ex) {
+                        FlashMessages::addMessage(e(I18N::translate('The settings file could not be read: %s', $ex->getMessage())), 'danger');
                     }
-
-                    // Now you can work with $unserialized_data
-                    $settings = $unserialized_data;
                 }
                 // exit;
                 $response = $this->getChartAction($request, $settings);
@@ -582,6 +594,137 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
 
     /**
+     * Names of the setting fields in the form of an export type
+     *
+     * Only these fields are written to and read from a settings file.
+     * Control fields like _csrf or mod_action are not settings.
+     *
+     * @param string $export_type 'latex' or 'graphml'
+     * @return array<string>
+     */
+    public function settingsFields(string $export_type): array
+    {
+        return array_merge(
+            array('refid', 'ref_father', 'ref_mother', 'ref_wife', 'ref_husband', 'ref_son', 'ref_daughter'),
+            self::SETTINGS_FIELDS[$export_type]
+        );
+    }
+
+
+    /**
+     * Encode the settings of the form as JSON
+     *
+     * @param string $export_type 'latex' or 'graphml'
+     * @param array $post the submitted form data
+     * @return string
+     */
+    public function encodeSettings(string $export_type, array $post): string
+    {
+        $settings = array();
+        foreach ($this->settingsFields($export_type) as $name) {
+            if (array_key_exists($name, $post) && is_string($post[$name])) {
+                $settings[$name] = $post[$name];
+            }
+        }
+
+        return json_encode(
+            array(
+                'format' => self::SETTINGS_FORMAT,
+                'version' => self::SETTINGS_VERSION,
+                'export_type' => $export_type,
+                'settings' => (object) $settings,
+            ),
+            JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+        ) . "\n";
+    }
+
+
+    /**
+     * Decode a settings file
+     *
+     * Reads the JSON format and the old format (base64 encoded serialized POST data).
+     * The result contains only the setting fields of the export type.
+     *
+     * @param string $export_type 'latex' or 'graphml'
+     * @param string $content the content of the settings file
+     * @return array<string,string>
+     * @throws UnexpectedValueException if the file is no valid settings file
+     */
+    public function decodeSettings(string $export_type, string $content): array
+    {
+        // Remove the Byte Order Mark and surrounding white space
+        $content = trim(preg_replace('/^\xEF\xBB\xBF/', '', $content));
+
+        if (str_starts_with($content, '{')) {
+            try {
+                $data = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
+            } catch (JsonException $ex) {
+                throw new UnexpectedValueException(I18N::translate('invalid JSON (%s)', $ex->getMessage()));
+            }
+            if (!is_array($data) || ($data['format'] ?? null) !== self::SETTINGS_FORMAT) {
+                throw new UnexpectedValueException(I18N::translate('this is no settings file of this module'));
+            }
+            if (($data['version'] ?? null) !== self::SETTINGS_VERSION) {
+                throw new UnexpectedValueException(I18N::translate('unsupported version'));
+            }
+            if (($data['export_type'] ?? null) !== $export_type) {
+                throw new UnexpectedValueException(I18N::translate('the file contains settings for another export type'));
+            }
+            $settings = $data['settings'] ?? null;
+        } else {
+            // old format: objects are never allowed (protection against object injection)
+            $decoded = base64_decode($content, true);
+            $settings = ($decoded === false) ? false : @unserialize($decoded, ['allowed_classes' => false]);
+        }
+
+        if (!is_array($settings)) {
+            throw new UnexpectedValueException(I18N::translate('this is no settings file of this module'));
+        }
+
+        $result = array();
+        foreach ($this->settingsFields($export_type) as $name) {
+            if (array_key_exists($name, $settings)) {
+                if (!is_string($settings[$name])) {
+                    throw new UnexpectedValueException(I18N::translate('the value of %s is no text', $name));
+                }
+                $result[$name] = $settings[$name];
+            }
+        }
+
+        return $result;
+    }
+
+
+    /**
+     * Read the default settings from the module folder
+     *
+     * The first existing file is used:
+     * - export_*_settings.local.json: own settings of the user (not part of the repository)
+     * - export_*_settings.txt: old format, created by the user with an earlier version
+     * - export_*_settings.json: general example of the repository
+     *
+     * @param string $export_type 'latex' or 'graphml'
+     * @return array<string,string>
+     */
+    public function readDefaultSettings(string $export_type): array
+    {
+        foreach (array('local.json', 'txt', 'json') as $extension) {
+            $file = __DIR__ . DIRECTORY_SEPARATOR . "export_{$export_type}_settings.{$extension}";
+            if (is_file($file)) {
+                try {
+                    return $this->decodeSettings($export_type, (string) file_get_contents($file));
+                } catch (UnexpectedValueException $ex) {
+                    FlashMessages::addMessage(e(I18N::translate('The settings file could not be read: %s', basename($file) . ': ' . $ex->getMessage())), 'danger');
+                    return array();
+                }
+            }
+        }
+
+        return array();
+    }
+
+
+    /**
      * Generate a form to define the graphml format
      *
      * This function generates a form to define the export parameter
@@ -595,16 +738,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         // fill read settings if not passed
         if (is_null($settings)) {
-            $filename = "export_graphml_settings.txt";
-            $file_path_and_name = dirname(__FILE__) . DIRECTORY_SEPARATOR . "{$filename}";
-            if (file_exists($file_path_and_name)) {
-                $myfile = fopen($file_path_and_name, "r");
-                $settings = fread($myfile, filesize($file_path_and_name));
-                $settings = unserialize(base64_decode($settings), ['allowed_classes' => false]);
-                if (!is_array($settings)) $settings = array();
-            } else {
-                $settings = array();
-            }
+            $settings = $this->readDefaultSettings('graphml');
         };
 
         // header
@@ -1053,16 +1187,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         // fill read settings if not passed
         if (is_null($settings)) {
-            $filename = "export_latex_settings.txt";
-            $file_path_and_name = dirname(__FILE__) . DIRECTORY_SEPARATOR . "{$filename}";
-            if (file_exists($file_path_and_name)) {
-                $myfile = fopen($file_path_and_name, "r");
-                $settings = fread($myfile, filesize($file_path_and_name));
-                $settings = unserialize(base64_decode($settings), ['allowed_classes' => false]);
-                if (!is_array($settings)) $settings = array();
-            } else {
-                $settings = array();
-            }
+            $settings = $this->readDefaultSettings('latex');
         };
 
         // header line 
