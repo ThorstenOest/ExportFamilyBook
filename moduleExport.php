@@ -53,6 +53,11 @@ class ExportFamilyBookData extends AbstractModule
     private $source_list = array();
     private $tree = null;
 
+    // caches for data which does not change during an export
+    // (records are kept by the webtrees registry, so the same object is returned for the same xref)
+    private ?WeakMap $record_cache = null;
+    private $tag_label_cache = array();
+
     /**
      * This function is called from ExportFamilyBook::postChartAction if mod_action is "export_latex" or "export_graphml".
      */
@@ -289,7 +294,11 @@ class ExportFamilyBookData extends AbstractModule
             }
 
             //            $date_label = strip_tags($date->display(false, $format));
-            $date_label = strip_tags($date->display($this->tree, $format, false));
+            $date_label = $this->cached(
+                $date,
+                'display|' . $format,
+                fn () => strip_tags($date->display($this->tree, $format, false))
+            );
         } else {
             $date_label = "";
         }
@@ -459,7 +468,7 @@ class ExportFamilyBookData extends AbstractModule
     {
         // get all facts with identifier $fact as ordered array
         $fact_string = "";
-        $Facts = $record->facts((array) $fact, true);
+        $Facts = $this->recordFacts($record, (array) $fact, true);
         if ($Facts) {
             if (empty($format)) {
                 // if $format is not given return all items
@@ -533,6 +542,16 @@ class ExportFamilyBookData extends AbstractModule
      * @return String
      */
     private function getGEDCOMTagLabel(string $tag, ?string $record_type = null)
+    {
+        $cache_key = ($record_type ?? "\0") . '|' . $tag;
+        if (!array_key_exists($cache_key, $this->tag_label_cache)) {
+            $this->tag_label_cache[$cache_key] = $this->findGEDCOMTagLabel($tag, $record_type);
+        }
+
+        return $this->tag_label_cache[$cache_key];
+    }
+
+    private function findGEDCOMTagLabel(string $tag, ?string $record_type)
     {
         if (!is_null($record_type)) $tag = $record_type . ':' . $tag;
         $element = Registry::elementFactory()->make($tag);
@@ -1028,7 +1047,7 @@ class ExportFamilyBookData extends AbstractModule
         if (is_null($child)) return ("");
 
         $is_adopted = "";
-        $ADOPs = $child->facts(['ADOP'], true);
+        $ADOPs = $this->recordFacts($child, ['ADOP'], true);
         foreach ($ADOPs as $fact) {
 
             $adopt_ADOP = $this->getADOP($fact, $FAMC);
@@ -1070,6 +1089,65 @@ class ExportFamilyBookData extends AbstractModule
     }
 
     /**
+     * Returns a value of a record from the cache or computes it
+     *
+     * webtrees filters, sorts and checks the privacy of facts on every call
+     * of facts(), childFamilies() etc. The templates ask for the same data
+     * many times, so the results are kept for the duration of the export.
+     *
+     * @param GedcomRecord $record
+     * @param string $key Cache key, unique per record
+     * @param callable $compute Computes the value if it is not cached
+     * @return mixed
+     */
+    private function cached($record, $key, $compute)
+    {
+        $this->record_cache ??= new WeakMap();
+        $values = $this->record_cache[$record] ?? array();
+        if (!array_key_exists($key, $values)) {
+            $values[$key] = $compute();
+            $this->record_cache[$record] = $values;
+        }
+        return $values[$key];
+    }
+
+    /**
+     * Cached version of GedcomRecord::facts()
+     */
+    private function recordFacts($record, array $filter = [], bool $sort = false)
+    {
+        return $this->cached(
+            $record,
+            'facts|' . implode(',', $filter) . '|' . (int) $sort,
+            fn () => $record->facts($filter, $sort)
+        );
+    }
+
+    /**
+     * Cached version of a getter without parameters, e.g. getBirthDate()
+     */
+    private function recordValue($record, string $method)
+    {
+        return $this->cached($record, $method, fn () => $record->$method());
+    }
+
+    /**
+     * Cached version of Individual::childFamilies()
+     */
+    private function childFamilies($individual)
+    {
+        return $this->cached($individual, 'childFamilies', fn () => $individual->childFamilies());
+    }
+
+    /**
+     * Cached version of Individual::spouseFamilies()
+     */
+    private function spouseFamilies($individual)
+    {
+        return $this->cached($individual, 'spouseFamilies', fn () => $individual->spouseFamilies());
+    }
+
+    /**
      * Substitute place holder in template for individuals
      *
      * This module substitutes place holders in templates for individuals.
@@ -1108,7 +1186,7 @@ class ExportFamilyBookData extends AbstractModule
         if (!isset($this->media_included)) $this->media_included = array();
 
         if ($record instanceof Fisharebest\Webtrees\Individual) {
-            $FAMC = $record->childFamilies();
+            $FAMC = $this->childFamilies($record);
         } else if ($record instanceof Fisharebest\Webtrees\Family) {
             $FAMC = array($record);
         }
@@ -1233,7 +1311,7 @@ class ExportFamilyBookData extends AbstractModule
                             $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
                             break;
                         case "NickName":
-                            $rec_name = $record->facts(["NAME"], true)[0];
+                            $rec_name = $this->recordFacts($record, ["NAME"], true)[0];
                             $nickname = $rec_name->attribute("NICK");
                             if ($nickname) {
                                 $tag_replacement .= $this->substituteSpecialCharacters($nickname, $doctype);
@@ -1276,7 +1354,7 @@ class ExportFamilyBookData extends AbstractModule
                             break;
                         case "BirthDate":
                             $tag_replacement .= $this->formatDate(
-                                $record->getBirthDate(),
+                                $this->recordValue($record, "getBirthDate"),
                                 //$record->getEstimatedBirthDate(),
                                 $this->get_format($format, 0)
                             );
@@ -1284,35 +1362,35 @@ class ExportFamilyBookData extends AbstractModule
                             break;
                         case "BirthPlace":
                             $tag_replacement .= $this->formatPlace(
-                                $record->getBirthPlace(),
+                                $this->recordValue($record, "getBirthPlace"),
                                 $this->get_format($format, 0)
                             );
                             $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
                             break;
                         case "DeathDate":
                             $tag_replacement .= $this->formatDate(
-                                $record->getDeathDate(),
+                                $this->recordValue($record, "getDeathDate"),
                                 $this->get_format($format, 0)
                             );
                             $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
                             break;
                         case "DeathPlace":
                             $tag_replacement .= $this->formatPlace(
-                                $record->getDeathPlace(),
+                                $this->recordValue($record, "getDeathPlace"),
                                 $this->get_format($format, 0)
                             );
                             $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
                             break;
                         case "MarriageDate":
                             $tag_replacement .= $this->formatDate(
-                                $record->getMarriageDate(),
+                                $this->recordValue($record, "getMarriageDate"),
                                 $this->get_format($format, 0)
                             );
                             $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
                             break;
                         case "MarriagePlace":
                             $tag_replacement .= $this->formatPlace(
-                                $record->getMarriagePlace(),
+                                $this->recordValue($record, "getMarriagePlace"),
                                 $this->get_format($format, 0)
                             );
                             $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
@@ -1354,7 +1432,7 @@ class ExportFamilyBookData extends AbstractModule
                         case "FeFactType":
                             $return_value = TRUE;
                             if ($this->get_format($format, 0) == "IfExist" and  get_class($record) != "Fisharebest\Webtrees\Fact") {
-                                $fact_records = $record->facts((array) $fact_type, true);
+                                $fact_records = $this->recordFacts($record, (array) $fact_type, true);
                                 if (empty($fact_records)) {
                                     $return_value = FALSE;
                                 }
@@ -1507,14 +1585,14 @@ class ExportFamilyBookData extends AbstractModule
                             $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
                             break;
                         case "Marriage":
-                            $marriage = $record->getMarriage();
+                            $marriage = $this->recordValue($record, "getMarriage");
                             if ($marriage) {
                                 $empty_tag_found = TRUE;
                             }
                             break;
                         case "MarriageDate":
                             $tag_replacement .= $this->formatDate(
-                                $record->getMarriageDate(),
+                                $this->recordValue($record, "getMarriageDate"),
                                 $this->get_format($format, 0)
                             );
                             $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
@@ -1522,7 +1600,7 @@ class ExportFamilyBookData extends AbstractModule
                         case "MarriagePlace":
                             // $record->getMarriagePlace() does not work because
                             // there is no exception handling in the function
-                            $marriage = $record->getMarriage();
+                            $marriage = $this->recordValue($record, "getMarriage");
                             if ($marriage) {
                                 $tag_replacement .= $this->formatPlace(
                                     $marriage->place(),
@@ -1601,7 +1679,7 @@ class ExportFamilyBookData extends AbstractModule
                             break;
                         case "ForeachFAMC":
                             // loop over all families where individual is a child
-                            $FAMC = $record->childFamilies();
+                            $FAMC = $this->childFamilies($record);
                             foreach ($FAMC as $family) {
                                 $counter += 1;
                                 list($term_tag_replacement, $term_tag_resolved) = $this->substitutePlaceHolder($family, $record, $ind_id, $comp["subtemplate"], $doctype, $brackets, $fact_symbols, $counter);
@@ -1613,7 +1691,7 @@ class ExportFamilyBookData extends AbstractModule
                             break;
                         case "ForeachFAMS":
                             // loop over all spouse families of an individual
-                            $FAMS = $record->spouseFamilies();
+                            $FAMS = $this->spouseFamilies($record);
                             foreach ($FAMS as $family) {
                                 $counter += 1;
                                 list($term_tag_replacement, $term_tag_resolved) = $this->substitutePlaceHolder($family, $record, $ind_id, $comp["subtemplate"], $doctype, $brackets, $fact_symbols, $counter);
@@ -1653,7 +1731,7 @@ class ExportFamilyBookData extends AbstractModule
                                     $facts_excluded = array();
                                 }
                                 $fact_types = array();
-                                $fact_records = $record->facts();
+                                $fact_records = $this->recordFacts($record);
                                 if (!empty($fact_records)) {
                                     foreach ($fact_records as $fact_record) {
                                         $tag = $fact_record->tag();
@@ -1702,7 +1780,7 @@ class ExportFamilyBookData extends AbstractModule
                             break;
                         case "ForeachFactInner":
                             // loop over facts of the same type sorted
-                            $fact_records = $record->facts((array) $fact_type, true);
+                            $fact_records = $this->recordFacts($record, (array) $fact_type, true);
                             if (!empty($fact_records)) {
                                 foreach ($fact_records as $fact_record) {
                                     $counter += 1;
@@ -1730,7 +1808,7 @@ class ExportFamilyBookData extends AbstractModule
                                 $id1 = $record->xref();
                             };
                             $media_links = [];
-                            foreach ($record->facts(["OBJE"], true) as $fact) {
+                            foreach ($this->recordFacts($record, ["OBJE"], true) as $fact) {
                                 // get the media object and add it to the array
                                 $media_links[] = $fact->target();
                             }
@@ -1738,23 +1816,23 @@ class ExportFamilyBookData extends AbstractModule
                             // add media from spouse family
                             if ($record instanceof Fisharebest\Webtrees\Individual) {
                                 // add media from facts
-                                foreach ($record->facts() as $fact) {
+                                foreach ($this->recordFacts($record) as $fact) {
                                     $OBJE = trim($fact->attribute('OBJE'), "@");
                                     if ($OBJE !== "") {
                                         $media_links[] = Registry::mediaFactory()->make($OBJE, $this->tree);
                                     }
                                 };
                                 // add media from spouse family
-                                $FAMS = $record->spouseFamilies();
+                                $FAMS = $this->spouseFamilies($record);
                                 foreach ($FAMS as $rec_fam) {
                                     // Family madia
-                                    foreach ($rec_fam->facts(["OBJE"], true) as $fact) {
+                                    foreach ($this->recordFacts($rec_fam, ["OBJE"], true) as $fact) {
                                         // get the media object and add it to the array
                                         $media_links[] = $fact->target();
                                     }
 
                                     // family fact media
-                                    foreach ($rec_fam->facts() as $fact) {
+                                    foreach ($this->recordFacts($rec_fam) as $fact) {
                                         $OBJE = trim($fact->attribute('OBJE'), "@");
                                         if ($OBJE !== "") {
                                             $media_links[] = Registry::mediaFactory()->make($OBJE, $this->tree);
@@ -1844,17 +1922,17 @@ class ExportFamilyBookData extends AbstractModule
                             break;
                         case "ForeachReference":
                             // get direct sources
-                            $facts = $record->facts(['SOUR']);
+                            $facts = $this->recordFacts($record, ['SOUR']);
                             $all_sources = array();
                             foreach ($facts as $fact) {
                                 $all_sources[] = $fact->Value();
                             }
 
                             // get all facts
-                            $facts = $record->facts();
-                            foreach ($record->spouseFamilies() as $family) {
+                            $facts = $this->recordFacts($record)->all();
+                            foreach ($this->spouseFamilies($record) as $family) {
                                 if ($family->canShow()) {
-                                    foreach ($family->facts() as $fact) {
+                                    foreach ($this->recordFacts($family) as $fact) {
                                         $facts[] = $fact;
                                     }
                                 }
@@ -1862,7 +1940,7 @@ class ExportFamilyBookData extends AbstractModule
 
                             // get sources from facts
                             foreach ($facts as $fact) {
-                                $fact_sources = $this->getAllAttributes($fact, 'SOUR');
+                                $fact_sources = $this->cached($fact, 'sources', fn () => $this->getAllAttributes($fact, 'SOUR'));
                                 if ($fact_sources) {
                                     $all_sources = array_merge($all_sources, $fact_sources);
                                 }
@@ -1918,12 +1996,19 @@ class ExportFamilyBookData extends AbstractModule
 					), $nodetext );
 			*/
             if ($doctype == "graphml") {
-                $nodetext = preg_replace("/<html>\s*<\/html>/", "", $nodetext);
+                if (str_contains($nodetext, '<html>')) {
+                    $nodetext = preg_replace("/<html>\s*<\/html>/", "", $nodetext);
+                }
             } else if ($doctype == "latex") {
                 // remove \\ in "\end{} \\"
-                $nodetext = preg_replace('/(\\\\end\{[^\\\{\}]*\}\s*)\\\\\\\\/', '$1 ', $nodetext);
+                // (the checks with str_contains only avoid running the expressions without need)
+                if (str_contains($nodetext, '\\end{')) {
+                    $nodetext = preg_replace('/(\\\\end\{[^\\\{\}]*\}\s*)\\\\\\\\/', '$1 ', $nodetext);
+                }
                 // remove \\ in "\\ \begin{}"
-                $nodetext = preg_replace('/\\\\\\\\(\s*\\\\begin\{[^\\\{\}]*\})/', '$1 ', $nodetext);
+                if (str_contains($nodetext, '\\begin{')) {
+                    $nodetext = preg_replace('/\\\\\\\\(\s*\\\\begin\{[^\\\{\}]*\})/', '$1 ', $nodetext);
+                }
             }
         }
 
@@ -2056,7 +2141,7 @@ class ExportFamilyBookData extends AbstractModule
             $ret_string .= "\n" . '@book{' .  $this->source_list[$id];
             //$ret_string .= "\n" . '@book{' . str_replace(['S','X'], ['',''], $id);
             //$record = GedcomRecord::getInstance($id, $this->tree);
-            $record = Registry::gedcomRecordFactory()->make($id, $tree);
+            $record = Registry::gedcomRecordFactory()->make($id, $tree, $rows->gedcom);
             // The object may have been deleted since we added it to the cart....
             // if ($object instanceof GedcomRecord) {
 
@@ -2124,7 +2209,7 @@ class ExportFamilyBookData extends AbstractModule
                         );
                         // spouse families
                         //$FAMS = $record->spouseFamilies();
-                        $FAMS = $record->spouseFamilies();
+                        $FAMS = $this->spouseFamilies($record);
 
                         $this->generationInd[$xrefInd] = array(
                             "branch" => $branch,
@@ -2164,7 +2249,7 @@ class ExportFamilyBookData extends AbstractModule
                     // relation does not include a "+" 
                     $include_ind = !$related_by_blood || strpos($reference, "+") === false;
 
-                    $FAMC = $ind->childFamilies();
+                    $FAMC = $this->childFamilies($ind);
                     foreach ($FAMC as $record) {
                         $parents = array($record->husband(), $record->wife());
                         foreach ($parents as $rec) {
@@ -2197,7 +2282,7 @@ class ExportFamilyBookData extends AbstractModule
 
                     // families of the same generation FAMS, i.e. generation +0
                     // get spouse and childreen
-                    $FAMS = $ind->spouseFamilies();
+                    $FAMS = $this->spouseFamilies($ind);
                     foreach ($FAMS as $record) {
 
                         // get spouse
@@ -2418,6 +2503,8 @@ class ExportFamilyBookData extends AbstractModule
 
         foreach ($rowsInd as $row) {
             $xrefInd[] = $row->xref;
+            // create the record from the data already read, this avoids one database query per individual
+            Registry::individualFactory()->make($row->xref, $this->tree, $row->gedcom);
         };
         foreach ($rowsFam as $row) {
             $xrefFam[] = $row->xref;
@@ -2470,7 +2557,7 @@ class ExportFamilyBookData extends AbstractModule
                 ) {
                     //setGeneration ( $xref, $branch, 1 );
                     //$record = Individual::getInstance($xref, $this->tree);
-                    $record = Registry::gedcomRecordFactory()->make($xref, $this->tree);
+                    $record = Registry::individualFactory()->make($xref, $this->tree);
                     $this->setFAMSFAMC(array(array(
                         "ind" => $record,
                         "ref" => "n", "generation" => 0
@@ -2647,6 +2734,8 @@ class ExportFamilyBookData extends AbstractModule
             $no = 0;
             $gen_no = 0;
             $last_branch = array_values($this->generationInd)[0]['branch'] - 1;
+            // generation range, used to count same symbols in the reference
+            $ng = max($a_generation) - min($a_generation);
 
             foreach ($this->generationInd as $key => $row) {
                 $no += 1;
@@ -2705,7 +2794,6 @@ class ExportFamilyBookData extends AbstractModule
                 }
 
                 // count same symbols
-                $ng = max($a_generation) - min($a_generation);
                 for ($i = $ng; $i >= 1; $i--) {
                     $ref = preg_replace('/(\w)\1{' . $i . '}/', ($i + 1) . '$1', $ref);
                 }
@@ -2950,8 +3038,9 @@ class ExportFamilyBookData extends AbstractModule
                 if ($include) {
 
                     $no_of_generations = count($sub_branch_array);
-                    //$FAMS = array();
-                    $FAMS = new Collection();
+                    // families of the sub branch in the order of their first occurrence
+                    $xrefFam = array();
+                    // individuals of the sub branch, the xref is the key
                     $ind_xref_list = array();
                     $sub_branch_no += 1;
 
@@ -2962,14 +3051,16 @@ class ExportFamilyBookData extends AbstractModule
                             $this->increaseTimeLimit();
                             $xref = $value['xref'];
                             $node_id = $xref . "_" . $sub_branch_no;
-                            $ind_xref_list[] = $xref;
+                            $ind_xref_list[$xref] = true;
                             $has_sub_branch_link = array_key_exists("sub_branch_link_id", $value);
                             //foreach ( $this->generationInd as $key => $row ) {
                             //$FAMS = array_merge($FAMS, $value['spouse_family']);
-                            $FAMS = $FAMS->merge($value['spouse_family']);
+                            foreach ($value['spouse_family'] as $family) {
+                                $xrefFam[$family->xref()] = $family->xref();
+                            }
 
                             //$record = Individual::getInstance($xref, $this->tree);
-                            $record = Registry::gedcomRecordFactory()->make($xref, $this->tree);
+                            $record = Registry::individualFactory()->make($xref, $this->tree);
 
                             // get parameter for the export
                             $sex = $record->sex();
@@ -3065,16 +3156,11 @@ class ExportFamilyBookData extends AbstractModule
                     $font_size = $parameter['font_size_family'];
 
                     // loop over all families
-                    $xrefFam = array();
-                    foreach ($FAMS as $row) {
-                        $xref = $row->xref();
-                        if (!in_array($xref, $xrefFam)) $xrefFam[] = $xref;
-                    }
                     foreach ($xrefFam as $xref) {
                         // increase time limit
                         $this->increaseTimeLimit();
                         //$record = Family::getInstance($xref, $this->tree);
-                        $record = Registry::gedcomRecordFactory()->make($xref, $this->tree);
+                        $record = Registry::familyFactory()->make($xref, $this->tree);
 
                         $node_id_fam = $xref . "_" . $sub_branch_no;
                         // now replace the tags with record data
@@ -3171,7 +3257,7 @@ class ExportFamilyBookData extends AbstractModule
                         $node_id_fam = $xref . "_" . $sub_branch_no;
                         //
                         //$record = Family::getInstance($xref, $this->tree);
-                        $record = Registry::gedcomRecordFactory()->make($xref, $this->tree);
+                        $record = Registry::familyFactory()->make($xref, $this->tree);
 
                         // get all parents
                         $parents = array(
@@ -3184,7 +3270,7 @@ class ExportFamilyBookData extends AbstractModule
                             "\n" . '</edge>' . "\n";
                         // loop over parents and add edges for parents
                         foreach ($parents as $parent) {
-                            if ($parent and in_array($parent->xref(),  $ind_xref_list)) {
+                            if ($parent and isset($ind_xref_list[$parent->xref()])) {
                                 $no_edge += 1;
                                 $buffer .= '<edge id="' . $no_edge . '" source="' .
                                     $parent->xref() . "_" . $sub_branch_no
@@ -3196,7 +3282,7 @@ class ExportFamilyBookData extends AbstractModule
                         $children = $record->children();
 
                         foreach ($children as $child) {
-                            if (in_array($child->xref(),  $ind_xref_list)) {
+                            if (isset($ind_xref_list[$child->xref()])) {
                                 $no_edge += 1;
                                 $buffer .= '<edge id="' . $no_edge . '" source="' . $node_id_fam .
                                     '" target="' . $child->xref() . "_" . $sub_branch_no
@@ -3381,7 +3467,7 @@ class ExportFamilyBookData extends AbstractModule
                                 $name = $value['name'];
 
                                 //$record = Individual::getInstance($xref, $this->tree);
-                                $record = Registry::gedcomRecordFactory()->make($xref, $this->tree);
+                                $record = Registry::individualFactory()->make($xref, $this->tree);
 
                                 // get parameter for the export
                                 $sex = $record->sex();
@@ -3455,7 +3541,7 @@ class ExportFamilyBookData extends AbstractModule
 						}*/
 
                             //$record = Individual::getInstance($xref, $this->tree);
-                            $record = Registry::gedcomRecordFactory()->make($xref, $this->tree);
+                            $record = Registry::individualFactory()->make($xref, $this->tree);
 
                             // get parameter for the export
                             $sex = $record->sex();
