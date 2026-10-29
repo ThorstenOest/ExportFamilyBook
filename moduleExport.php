@@ -20,6 +20,7 @@ use Fisharebest\Webtrees\Module\AbstractModule;
 use Fisharebest\Webtrees\DB;
 use Illuminate\Database\Query\Expression;
 use Fisharebest\Webtrees\GedcomRecord;
+use Fisharebest\Webtrees\Gedcom;
 use Fisharebest\Webtrees\Media;
 use Fisharebest\Webtrees\Module\ModuleCustomInterface;
 use Fisharebest\Webtrees\Module\ModuleChartInterface;
@@ -1148,6 +1149,79 @@ class ExportFamilyBookData extends AbstractModule
     }
 
     /**
+     * Can the individual be exported?
+     *
+     * Only individuals the current user may see in webtrees are exported, neither as
+     * an entry nor as a relative of another individual. Family::husband(), wife() and
+     * children() are not sufficient: they also return hidden individuals if their
+     * names may be shown (SHOW_LIVING_NAMES) or if SHOW_PRIVATE_RELATIONSHIPS is set.
+     * Facts are filtered by webtrees itself in GedcomRecord::facts().
+     */
+    private function canExport($individual): bool
+    {
+        return $individual instanceof Individual && $individual->canShow();
+    }
+
+    /**
+     * Husband of a family, null if he may not be exported
+     */
+    private function husband($family)
+    {
+        return $this->cached($family, 'husband', function () use ($family) {
+            $husband = $family->husband();
+            return $this->canExport($husband) ? $husband : null;
+        });
+    }
+
+    /**
+     * Wife (or second partner) of a family, null if she may not be exported
+     */
+    private function wife($family)
+    {
+        return $this->cached($family, 'wife', function () use ($family) {
+            $wife = $family->wife();
+            return $this->canExport($wife) ? $wife : null;
+        });
+    }
+
+    /**
+     * Partner of $individual in $family, null if there is none or if it may not be exported
+     */
+    private function spouse($family, $individual)
+    {
+        // without privacy filter, otherwise a hidden husband would make the wife her own spouse
+        $spouse = $family->husband(Auth::PRIV_HIDE);
+        if (is_null($spouse) or $individual->xref() == $spouse->xref()) {
+            $spouse = $family->wife(Auth::PRIV_HIDE);
+        }
+        return $this->canExport($spouse) ? $spouse : null;
+    }
+
+    /**
+     * Children of a family which may be exported
+     */
+    private function children($family)
+    {
+        return $this->cached(
+            $family,
+            'children',
+            fn () => $family->children()->filter(fn ($child) => $this->canExport($child))->values()
+        );
+    }
+
+    /**
+     * Can the source with the given xref ("@S1@") be shown? Inline sources are always shown.
+     */
+    private function canShowSource(string $source): bool
+    {
+        if (!preg_match('/^@(' . Gedcom::REGEX_XREF . ')@$/', $source, $match)) {
+            return true;
+        }
+        $record = Registry::sourceFactory()->make($match[1], $this->tree);
+        return $record === null || $record->canShow();
+    }
+
+    /**
      * Substitute place holder in template for individuals
      *
      * This module substitutes place holders in templates for individuals.
@@ -1258,21 +1332,18 @@ class ExportFamilyBookData extends AbstractModule
                                 case "FatherGivenName":
                                 case "FatherSurName":
                                     if (count($FAMC) > 0) {
-                                        $rec = $FAMC[0]->husband();
+                                        $rec = $this->husband($FAMC[0]);
                                     }
                                     break;
                                 case "MotherGivenName":
                                 case "MotherSurName":
                                     if (count($FAMC) > 0) {
-                                        $rec = $FAMC[0]->wife();
+                                        $rec = $this->wife($FAMC[0]);
                                     }
                                     break;
                                 case "SpouseGivenName":
                                 case "SpouseSurName":
-                                    $rec = $record->husband();
-                                    if (is_null($rec) or $record_context->xref() == $rec->xref()) {
-                                        $rec = $record->wife();
-                                    }
+                                    $rec = $this->spouse($record, $record_context);
                                     break;
                             }
                             switch ($comp["component"]) {
@@ -1327,17 +1398,14 @@ class ExportFamilyBookData extends AbstractModule
                                     $rec = $record;
                                     break;
                                 case "SpouseId":
-                                    $rec = $record->husband();
-                                    if (is_null($rec) or $record_context->xref() == $rec->xref()) {
-                                        $rec = $record->wife();
-                                    }
+                                    $rec = $this->spouse($record, $record_context);
                                     break;
                                 default:
                                     if (count($FAMC) > 0) {
                                         if ($comp["component"] == "FatherId") {
-                                            $rec = $FAMC[0]->husband();
+                                            $rec = $this->husband($FAMC[0]);
                                         } elseif ($comp["component"] == "MotherId") {
-                                            $rec = $FAMC[0]->wife();
+                                            $rec = $this->wife($FAMC[0]);
                                         }
                                     }
                                     break;
@@ -1580,7 +1648,9 @@ class ExportFamilyBookData extends AbstractModule
                             $tag_replacement = preg_replace(
                                 "/\\n/",
                                 "<br>",
-                                $record->gedcom()
+                                $record instanceof GedcomRecord
+                                    ? $record->privatizeGedcom(Auth::accessLevel($this->tree))
+                                    : $record->gedcom()
                             );
                             $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
                             break;
@@ -1703,7 +1773,7 @@ class ExportFamilyBookData extends AbstractModule
                             break;
                         case "ForeachChildren":
                             // loop over all children of a family 
-                            $children = $record->children();
+                            $children = $this->children($record);
                             foreach ($children as $child) {
                                 $counter += 1;
                                 list($term_tag_replacement, $term_tag_resolved) =  $this->substitutePlaceHolder($child, $record, $ind_id, $comp["subtemplate"], $doctype, $brackets, $fact_symbols, $counter);
@@ -1948,6 +2018,9 @@ class ExportFamilyBookData extends AbstractModule
                             $all_sources = array_unique($all_sources);
 
                             foreach ($all_sources as $source) {
+                                if (!$this->canShowSource($source)) {
+                                    continue;
+                                }
                                 $counter += 1;
                                 list($term_tag_replacement, $term_tag_resolved) = $this->substitutePlaceHolder(
                                     $source,
@@ -2137,6 +2210,9 @@ class ExportFamilyBookData extends AbstractModule
         foreach ($source_rows as $rows) {
             $id = $rows->xref;
             $tree = $this->tree;
+            if (!Registry::sourceFactory()->make($id, $tree, $rows->gedcom)->canShow()) {
+                continue;
+            }
             $this->source_list[$id] = count($this->source_list) + 1;
             $ret_string .= "\n" . '@book{' .  $this->source_list[$id];
             //$ret_string .= "\n" . '@book{' . str_replace(['S','X'], ['',''], $id);
@@ -2251,7 +2327,7 @@ class ExportFamilyBookData extends AbstractModule
 
                     $FAMC = $this->childFamilies($ind);
                     foreach ($FAMC as $record) {
-                        $parents = array($record->husband(), $record->wife());
+                        $parents = array($this->husband($record), $this->wife($record));
                         foreach ($parents as $rec) {
                             if ($rec !== null) {
                                 $this->generationInd[$xrefInd]["parents"][] = $rec->xref();
@@ -2287,9 +2363,9 @@ class ExportFamilyBookData extends AbstractModule
 
                         // get spouse
                         if ($ind->sex() == "F") {
-                            $spouse = $record->husband();
+                            $spouse = $this->husband($record);
                         } else {
-                            $spouse = $record->wife();
+                            $spouse = $this->wife($record);
                         };
                         if ($spouse !== null)    $this->generationInd[$xrefInd]["spouse"][] = $spouse->xref();
                         //foreach ($spouse as $rec ) {
@@ -2307,7 +2383,7 @@ class ExportFamilyBookData extends AbstractModule
 
                         // get children
                         //$children = $record->children();
-                        $children = $record->children();
+                        $children = $this->children($record);
                         foreach ($children as $child) {
                             // check if adopted
                             $is_adopted = $this->checkADOP($child, $record, $ind);
@@ -2502,9 +2578,12 @@ class ExportFamilyBookData extends AbstractModule
             ->get();
 
         foreach ($rowsInd as $row) {
-            $xrefInd[] = $row->xref;
             // create the record from the data already read, this avoids one database query per individual
-            Registry::individualFactory()->make($row->xref, $this->tree, $row->gedcom);
+            $individual = Registry::individualFactory()->make($row->xref, $this->tree, $row->gedcom);
+            // export only individuals the current user may see
+            if ($this->canExport($individual)) {
+                $xrefInd[] = $row->xref;
+            }
         };
         foreach ($rowsFam as $row) {
             $xrefFam[] = $row->xref;
@@ -2521,7 +2600,10 @@ class ExportFamilyBookData extends AbstractModule
             # with this individual and return only one tree
             #
             $branch = 1;
-            if (array_key_exists('refid', $_POST) and $_POST["refid"]) {
+            if (
+                array_key_exists('refid', $_POST) and $_POST["refid"] and
+                $this->canExport(Registry::individualFactory()->make($_POST["refid"], $this->tree))
+            ) {
                 $xref = $_POST["refid"];
                 //$record = Individual::getInstance($xref, $this->tree);
                 $record = Registry::gedcomRecordFactory()->make($xref, $this->tree);
@@ -2609,6 +2691,10 @@ class ExportFamilyBookData extends AbstractModule
             $inds_to_be_copied = array();
             foreach ($seeds as $seed_no => $seed) {
                 $xref = $seed["xref"];
+                // skip seeds the current user may not see (or which do not exist)
+                if (!array_key_exists($xref, $this->generationInd)) {
+                    continue;
+                }
                 $name = $seed["name"];
                 $direction = $seed["direction"];
                 $stop =  $seed["stop"];
@@ -3261,7 +3347,7 @@ class ExportFamilyBookData extends AbstractModule
 
                         // get all parents
                         $parents = array(
-                            $record->husband(), $record->wife()
+                            $this->husband($record), $this->wife($record)
                         );
 
                         $key6 = '<data key="d6"> <y:PolyLineEdge> <y:Path sx="0.0" sy="17.5" tx="0.0" ty="-10"/> <y:LineStyle color="#000000" type="line" width="' .
@@ -3279,7 +3365,7 @@ class ExportFamilyBookData extends AbstractModule
                         }
 
                         // get all children and add edges for children
-                        $children = $record->children();
+                        $children = $this->children($record);
 
                         foreach ($children as $child) {
                             if (isset($ind_xref_list[$child->xref()])) {
