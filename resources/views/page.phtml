@@ -1,9 +1,7 @@
 <?php
 
 use Fisharebest\Webtrees\I18N;
-use Fisharebest\Webtrees\Functions\FunctionsPrint;
-$current_directory = dirname(__FILE__);
-$html_help_content = file_get_contents($current_directory . '\page_help.html');
+$html_help_content = file_get_contents(__DIR__ . '/page_help.html');
 $escaped_help_content = json_encode($html_help_content);
 ?>
 <!---  Popup window with help -->
