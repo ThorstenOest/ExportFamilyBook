@@ -29,6 +29,7 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\StreamFactoryInterface;
+use League\Flysystem\FilesystemException;
 
 /**
  * Main class for FamilyBookExport module
@@ -67,6 +68,37 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             'default_portrait_male', 'default_portrait_female', 'default_portrait_unknown',
             'font', 'edge_line_width', 'node_style_link', 'border_width_link', 'border_link_color',
         ),
+    );
+
+    // Folder for the default settings of a tree, relative to the webtrees data folder:
+    // ExportFamilyBook/<tree>/<export type>/
+    private const TREE_SETTINGS_FOLDER = 'ExportFamilyBook';
+
+    // Long fields stored as text files of their own (field => file extension) in the folder of a tree.
+    // The file contains the value as it is (no escaping), all other fields are stored in settings.json.
+    private const SETTINGS_TEXT_FILES = array(
+        'latex' => array(
+            'preamble' => 'tex',
+            'title' => 'tex',
+            'individuals_summary_label_template' => 'tex',
+            'individuals_label_template' => 'tex',
+            'epilog' => 'tex',
+            'branch_seeds' => 'txt',
+            'symbols' => 'txt',
+        ),
+        'graphml' => array(
+            'individuals_label_template' => 'html',
+            'individuals_description_template' => 'txt',
+            'families_label_template' => 'html',
+            'families_description_template' => 'txt',
+            'branch_seeds' => 'txt',
+        ),
+    );
+
+    // Comma separated lists of media IDs stored as text files with one ID per line
+    private const SETTINGS_LIST_FILES = array(
+        'latex' => array('include_media', 'exclude_media'),
+        'graphml' => array(),
     );
 
     /**
@@ -323,6 +355,25 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                     }
                 }
                 // exit;
+                $response = $this->getChartAction($request, $settings);
+                break;
+            case "save_tree_settings_graphml":
+            case "save_tree_settings_latex":
+                // save the form as default settings of the tree (files in the data folder)
+                $export_type = ($mod_action == 'save_tree_settings_graphml') ? 'graphml' : 'latex';
+                $settings = $this->settingsFromForm($export_type, $parsedBodys);
+                $user = Validator::attributes($request)->user();
+                if (!Auth::isManager($tree, $user)) {
+                    FlashMessages::addMessage(e(I18N::translate('Only managers of the family tree can save the default settings of the tree.')), 'danger');
+                } else {
+                    $folder = $this->treeSettingsFolder($tree, $export_type);
+                    try {
+                        $this->writeTreeSettings($export_type, $folder, $settings);
+                        FlashMessages::addMessage(e(I18N::translate('The settings have been saved as default of the tree in %s.', Registry::filesystem()->dataName() . $folder)), 'success');
+                    } catch (FilesystemException | JsonException $ex) {
+                        FlashMessages::addMessage(e(I18N::translate('The settings could not be saved in %s: %s', Registry::filesystem()->dataName() . $folder, $ex->getMessage())), 'danger');
+                    }
+                }
                 $response = $this->getChartAction($request, $settings);
                 break;
             case "change_export_type":
@@ -620,12 +671,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
      */
     public function encodeSettings(string $export_type, array $post): string
     {
-        $settings = array();
-        foreach ($this->settingsFields($export_type) as $name) {
-            if (array_key_exists($name, $post) && is_string($post[$name])) {
-                $settings[$name] = $post[$name];
-            }
-        }
+        $settings = $this->settingsFromForm($export_type, $post);
 
         return json_encode(
             array(
@@ -696,6 +742,27 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
 
     /**
+     * Read the default settings shown when the form is opened
+     *
+     * The files of the tree in the data folder (see readTreeSettings) are used first.
+     * A field without a file there gets its value from the module folder (see readModuleSettings).
+     *
+     * @param string $export_type 'latex' or 'graphml'
+     * @param Tree|null $tree
+     * @return array<string,string>
+     */
+    public function readDefaultSettings(string $export_type, ?Tree $tree = null): array
+    {
+        $settings = $this->readModuleSettings($export_type);
+        if ($tree !== null) {
+            $settings = array_merge($settings, $this->readTreeSettings($export_type, $this->treeSettingsFolder($tree, $export_type)));
+        }
+
+        return $settings;
+    }
+
+
+    /**
      * Read the default settings from the module folder
      *
      * The first existing file is used:
@@ -706,7 +773,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
      * @param string $export_type 'latex' or 'graphml'
      * @return array<string,string>
      */
-    public function readDefaultSettings(string $export_type): array
+    public function readModuleSettings(string $export_type): array
     {
         foreach (array('local.json', 'txt', 'json') as $extension) {
             $file = __DIR__ . DIRECTORY_SEPARATOR . "export_{$export_type}_settings.{$extension}";
@@ -725,6 +792,318 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
 
     /**
+     * The setting fields of a submitted form (only text values of the whitelist)
+     *
+     * @param string $export_type 'latex' or 'graphml'
+     * @param array $post the submitted form data
+     * @return array<string,string>
+     */
+    public function settingsFromForm(string $export_type, array $post): array
+    {
+        $settings = array();
+        foreach ($this->settingsFields($export_type) as $name) {
+            if (array_key_exists($name, $post) && is_string($post[$name])) {
+                $settings[$name] = $post[$name];
+            }
+        }
+
+        return $settings;
+    }
+
+
+    /**
+     * Name of the folder of a tree: the tree name if it is safe, otherwise a safe name with a hash
+     *
+     * Only letters, digits, '_' and '-' are kept, so the name can never leave the parent folder.
+     *
+     * @param string $tree_name
+     * @return string
+     */
+    public function treeFolderName(string $tree_name): string
+    {
+        $safe = (string) preg_replace('/[^A-Za-z0-9_-]/', '_', $tree_name);
+        if ($safe !== $tree_name || $safe === '') {
+            $safe .= '-' . substr(hash('sha256', $tree_name), 0, 8);
+        }
+
+        return $safe;
+    }
+
+
+    /**
+     * Folder with the default settings of a tree, relative to the webtrees data folder
+     *
+     * @param Tree $tree
+     * @param string $export_type 'latex' or 'graphml'
+     * @return string e.g. ExportFamilyBook/tree1/latex
+     */
+    public function treeSettingsFolder(Tree $tree, string $export_type): string
+    {
+        return self::TREE_SETTINGS_FOLDER . '/' . $this->treeFolderName($tree->name()) . '/' .
+            ($export_type === 'graphml' ? 'graphml' : 'latex');
+    }
+
+
+    /**
+     * Value of a text file: line endings as sent by a form (CRLF), without a final line break
+     *
+     * Files may use LF or CRLF and start with a UTF-8 byte order mark.
+     *
+     * @param string $content
+     * @return string
+     */
+    private function decodeTextFile(string $content): string
+    {
+        $content = (string) preg_replace('/^\xEF\xBB\xBF/', '', $content);
+        $content = str_replace(array("\r\n", "\r"), "\n", $content);
+        if (str_ends_with($content, "\n")) {
+            $content = substr($content, 0, -1);
+        }
+
+        return str_replace("\n", "\r\n", $content);
+    }
+
+
+    /**
+     * Content of a text file for a value: LF line endings and a final line break
+     *
+     * @param string $value
+     * @return string
+     */
+    private function encodeTextFile(string $value): string
+    {
+        return str_replace(array("\r\n", "\r"), "\n", $value) . "\n";
+    }
+
+
+    /**
+     * Value of a list file: the IDs separated by commas
+     *
+     * One ID per line, commas are allowed as well. Empty lines, spaces and
+     * text after '#' are ignored ('#' is no valid character of an ID).
+     *
+     * @param string $content
+     * @return string
+     */
+    private function decodeListFile(string $content): string
+    {
+        $content = (string) preg_replace('/^\xEF\xBB\xBF/', '', $content);
+        $items = array();
+        foreach (preg_split('/\r\n|\r|\n/', $content) as $line) {
+            $line = (string) preg_replace('/#.*/', '', $line);
+            foreach (explode(',', $line) as $item) {
+                $item = trim($item);
+                if ($item !== '') {
+                    $items[] = $item;
+                }
+            }
+        }
+
+        return implode(',', $items);
+    }
+
+
+    /**
+     * Content of a list file for a value: one ID per line
+     *
+     * @param string $value IDs separated by commas
+     * @return string
+     */
+    private function encodeListFile(string $value): string
+    {
+        $value = $this->decodeListFile($value);
+
+        return ($value === '') ? '' : str_replace(',', "\n", $value) . "\n";
+    }
+
+
+    /**
+     * Read the default settings of a tree from its folder in the data folder
+     *
+     * settings.json contains the short fields, each long field has a text file of its own,
+     * each list of media IDs a list file. A missing file gives no value for its fields.
+     *
+     * @param string $export_type 'latex' or 'graphml'
+     * @param string $folder folder relative to the data folder
+     * @return array<string,string>
+     */
+    public function readTreeSettings(string $export_type, string $folder): array
+    {
+        $data = Registry::filesystem()->data();
+        $settings = array();
+        $file = $folder . '/settings.json';
+        try {
+            if (!$data->directoryExists($folder)) {
+                return array();
+            }
+            if ($data->fileExists($file)) {
+                try {
+                    $settings = $this->decodeSettings($export_type, $data->read($file));
+                } catch (UnexpectedValueException $ex) {
+                    FlashMessages::addMessage(e(I18N::translate('The settings file could not be read: %s', $file . ': ' . $ex->getMessage())), 'danger');
+                }
+            }
+            foreach (self::SETTINGS_TEXT_FILES[$export_type] as $name => $extension) {
+                $file = $folder . '/' . $name . '.' . $extension;
+                if ($data->fileExists($file)) {
+                    $settings[$name] = $this->decodeTextFile($data->read($file));
+                }
+            }
+            foreach (self::SETTINGS_LIST_FILES[$export_type] as $name) {
+                $file = $folder . '/' . $name . '.txt';
+                if ($data->fileExists($file)) {
+                    $settings[$name] = $this->decodeListFile($data->read($file));
+                }
+            }
+        } catch (FilesystemException $ex) {
+            FlashMessages::addMessage(e(I18N::translate('The settings file could not be read: %s', $file . ': ' . $ex->getMessage())), 'danger');
+        }
+
+        return $settings;
+    }
+
+
+    /**
+     * Write the settings of the form as default settings of a tree
+     *
+     * Only files whose value changed are written. So comments in a list file and
+     * the line endings chosen by the user are kept as long as the value is the same.
+     * README.txt is only written if it does not exist.
+     *
+     * @param string $export_type 'latex' or 'graphml'
+     * @param string $folder folder relative to the data folder
+     * @param array<string,string> $settings
+     * @throws FilesystemException
+     * @throws JsonException
+     */
+    public function writeTreeSettings(string $export_type, string $folder, array $settings): void
+    {
+        $data = Registry::filesystem()->data();
+        $data->createDirectory($folder);
+
+        $text_files = self::SETTINGS_TEXT_FILES[$export_type];
+        $list_files = array_flip(self::SETTINGS_LIST_FILES[$export_type]);
+        $short = array_diff_key($settings, $text_files, $list_files);
+
+        // settings.json with the short fields
+        $file = $folder . '/settings.json';
+        $old = null;
+        if ($data->fileExists($file)) {
+            try {
+                $old = $this->decodeSettings($export_type, $data->read($file));
+            } catch (UnexpectedValueException $ex) {
+                $old = null;
+            }
+        }
+        if ($old !== $short) {
+            $data->write($file, $this->encodeSettings($export_type, $short));
+        }
+
+        foreach ($settings as $name => $value) {
+            if (array_key_exists($name, $text_files)) {
+                $file = $folder . '/' . $name . '.' . $text_files[$name];
+                $content = $this->encodeTextFile($value);
+                $decode = $this->decodeTextFile(...);
+            } elseif (array_key_exists($name, $list_files)) {
+                $file = $folder . '/' . $name . '.txt';
+                $content = $this->encodeListFile($value);
+                $decode = $this->decodeListFile(...);
+            } else {
+                continue;
+            }
+            if (!$data->fileExists($file) || $decode($data->read($file)) !== $decode($content)) {
+                $data->write($file, $content);
+            }
+        }
+
+        if (!$data->fileExists($folder . '/README.txt')) {
+            $data->write($folder . '/README.txt', $this->treeSettingsReadme($export_type));
+        }
+    }
+
+
+    /**
+     * Table row with the button to save the form as default settings of the tree (managers only)
+     *
+     * @param Tree $tree
+     * @param string $export_type 'latex' or 'graphml'
+     * @param int $colspan
+     * @return string
+     */
+    private function saveTreeSettingsRow(Tree $tree, string $export_type, int $colspan): string
+    {
+        if (!Auth::isManager($tree)) {
+            return '';
+        }
+
+        return '<tr><td class="topbottombar" colspan="' . $colspan . '">' .
+            '<button type="submit" name="mod_action" value="save_tree_settings_' . $export_type . '">' .
+            e(I18N::translate('Save as default for this tree')) . '</button> ' .
+            e(I18N::translate('Files in %s', Registry::filesystem()->dataName() . $this->treeSettingsFolder($tree, $export_type))) .
+            '</td></tr>';
+    }
+
+
+    /**
+     * Text of README.txt in the folder of a tree
+     *
+     * @param string $export_type 'latex' or 'graphml'
+     * @return string
+     */
+    private function treeSettingsReadme(string $export_type): string
+    {
+        $text_files = array();
+        foreach (self::SETTINGS_TEXT_FILES[$export_type] as $name => $extension) {
+            $text_files[] = '  ' . $name . '.' . $extension;
+        }
+        $list_files = array();
+        foreach (self::SETTINGS_LIST_FILES[$export_type] as $name) {
+            $list_files[] = '  ' . $name . '.txt';
+        }
+
+        $lines = array(
+            "ExportFamilyBook: default settings of this family tree ($export_type export)",
+            '',
+            'The module reads these files when its page is opened for this tree.',
+            'The button "Save as default for this tree" (managers of the tree only) writes them.',
+            'You can edit them with a text editor: UTF-8, LF or CRLF line endings.',
+            '',
+            'settings.json',
+            '  The short options, in the format of "Download Settings".',
+            '',
+            'Long fields, one file each. The file contains the text exactly as in the form,',
+            'without any escaping. One line break at the end of the file is ignored.',
+            ($export_type === 'latex')
+                ? 'In branch_seeds.txt and symbols.txt the first characters are the separators, as in the form.'
+                : 'In branch_seeds.txt the first two characters are the separators, as in the form.',
+        );
+        $lines = array_merge($lines, $text_files, array(''));
+        if ($list_files !== array()) {
+            $lines = array_merge(
+                $lines,
+                array(
+                    'Lists of media IDs: one ID per line (commas are allowed as well).',
+                    'Empty lines and text after # are ignored.',
+                ),
+                $list_files,
+                array('')
+            );
+        }
+        array_push(
+            $lines,
+            'If a file is missing, the value of that field is taken from the module folder:',
+            "export_{$export_type}_settings.local.json, else export_{$export_type}_settings.txt, else export_{$export_type}_settings.json.",
+            'To clear a field, keep its file and leave it empty.',
+            '',
+            'When saving, only files whose value has changed are written; README.txt is never overwritten.',
+            'Comments in a list file are lost when the list is changed in the form and saved.',
+        );
+
+        return implode("\n", $lines) . "\n";
+    }
+
+
+    /**
      * Generate a form to define the graphml format
      *
      * This function generates a form to define the export parameter
@@ -738,7 +1117,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         // fill read settings if not passed
         if (is_null($settings)) {
-            $settings = $this->readDefaultSettings('graphml');
+            $settings = $this->readDefaultSettings('graphml', $tree);
         };
 
         // header
@@ -1128,6 +1507,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         echo '<tr><td class="topbottombar" colspan="6">', '<button name="mod_action" value="download_settings_graphml">', I18N::translate(
             'Download Settings'
         ), '</button></td></tr>';
+        echo $this->saveTreeSettingsRow($tree, 'graphml', 6);
         echo '</table></form>';
         // echo '</table></form>';
 
@@ -1187,7 +1567,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         // fill read settings if not passed
         if (is_null($settings)) {
-            $settings = $this->readDefaultSettings('latex');
+            $settings = $this->readDefaultSettings('latex', $tree);
         };
 
         // header line 
@@ -1472,6 +1852,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         echo '<tr><td class="topbottombar" colspan="7">', '<button name="mod_action" value="download_settings_latex">', I18N::translate(
             'Download Settings'
         ), '</button></td></tr>';
+        echo $this->saveTreeSettingsRow($tree, 'latex', 7);
         echo '</table></form>';
         // echo '</table></form>';
 
