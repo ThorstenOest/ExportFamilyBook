@@ -10,7 +10,7 @@
         "ref_husband": "EM",
         "ref_son": "S",
         "ref_daughter": "T",
-        "individuals_label_template": "{}@&<html><table width=\"120\" cellspacing=\"0%\" cellpadding=\"0%\" >\r\n{<td width=\"33\"><img src=\"file:C:/xampp/htdocs/webtrees/data/media/thumbs/@Portrait@\" alt=\"kein Bild\" width=\"30\" height=\"@PortraitSize&w30@\"></td>}\r\n<td valign=\"top\"><b>{@GivenName&1,2,.@ }@SurName@ </b>\r\n{*@BirthDate&%Y@{ @BirthPlace&1,-1/Deutschland@} }\r\n{†@DeathDate&%Y@{ @DeathPlace&1,-1/Deutschland@} }\r\n{<span style=\"font-family:DejaVu Sans\">⚒</span> @FactOCCU&-1@}@Remove& @\r\n</td></table></html>",
+        "individuals_label_template": "{}@&<html><table width=\"120\" cellspacing=\"0%\" cellpadding=\"0%\" >\r\n{<td width=\"33\"><img src=\"file:/path/to/webtrees/data/media/thumbs/@Portrait@\" alt=\"kein Bild\" width=\"30\" height=\"@PortraitSize&w30@\"></td>}\r\n<td valign=\"top\"><b>{@GivenName&1,2,.@ }@SurName@ </b>\r\n{*@BirthDate&%Y@{ @BirthPlace&1,-1/Deutschland@} }\r\n{†@DeathDate&%Y@{ @DeathPlace&1,-1/Deutschland@} }\r\n{<span style=\"font-family:DejaVu Sans\">⚒</span> @FactOCCU&-1@}@Remove& @\r\n</td></table></html>",
         "individuals_description_template": "",
         "families_label_template": "{}@&<html>\r\n{<span style=\"font-family:DejaVu Sans\">⚭</span>@Marriage@}{ @MarriageDate&%Y@}</html>",
         "families_description_template": "",
