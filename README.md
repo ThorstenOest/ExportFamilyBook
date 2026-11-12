@@ -67,3 +67,55 @@ When the page is opened (`<type>` is `latex` or `graphml`), the first existing s
 4. `export_<type>_settings.json` in the module folder: general example of the repository.
 
 Sources 2 to 4 are alternatives: only the first existing file of them is used.
+
+## From the exported file to a PDF
+
+### Family book: `.tex` to PDF with TeXworks (MiKTeX)
+
+The example templates are written for XeLaTeX, because they use UTF-8 symbols and system fonts.
+
+1. Before the export, adapt the media path in the templates (`/path/to/webtrees/data/media/` in the
+   example) to a folder on the computer that builds the PDF. It must contain a copy of the webtrees
+   media folder.
+2. Install the fonts used in the preamble. The example uses Times New Roman, DejaVu Sans, Quivira and
+   Segoe UI Symbol.
+3. Open the exported `.tex` file in TeXworks and select the profile **XeLaTeX+MakeIndex+BibTeX**
+   in the drop-down list next to the green button.
+4. Press the green button. MiKTeX asks to install missing packages on the first run (for example
+   `bibtex8bit`); confirm these dialogs.
+5. Press the green button again until the page numbers, the index and the list of sources no longer
+   change. Usually two or three runs are needed.
+
+On the command line the same is done with:
+
+```
+xelatex book.tex
+bibtex8 book
+makeindex book
+xelatex book.tex
+xelatex book.tex
+```
+
+Notes:
+
+- The message "Please (re)run BibTeX" of biblatex may remain after the last run when `citecounter`
+  is used. The list of sources is complete nevertheless.
+- A large tree with many pictures needs several minutes per run.
+
+### Family tree chart: `.graphml` to PDF with yEd
+
+The thumbnails in the node labels are read from the path given in the label template
+(`file:/path/to/webtrees/data/media/thumbs/` in the example). Adapt it before the export.
+
+1. Open the exported `.graphml` file in yEd. All nodes are placed on top of each other at first.
+2. Adapt the height of the nodes to their content, so that the pictures fit into the boxes:
+   **Tools → Fit Node to Label** with
+   - *Act on Selection Only*: off (all nodes)
+   - *Adapt to Maximum Node*: off
+   - *Ignore Width*: on (the width given by the export is kept)
+   - *Ignore Height*: off
+3. Arrange the chart: **Layout → Family Tree**, tab *Layout*, *Orientation*: **Left To Right**.
+4. Save it as PDF: **File → Export**, file type PDF.
+
+If you run the layout first and adapt the node height afterwards, run the layout a second time,
+because it uses the node sizes it finds.
