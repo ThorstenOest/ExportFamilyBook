@@ -9,18 +9,46 @@ It has one entry per page:
 | Menu entry | Page | Address |
 |---|---|---|
 | Book (LaTeX) | export of the family book as a `.tex` file | `index.php?route=/module/_ExportFamilyBook_/Latex/<tree>` |
+| Image selection | choose the images of the family book (see below) | `index.php?route=/module/_ExportFamilyBook_/Media/<tree>` |
 | Family tree chart (GraphML) | export of the chart as a `.graphml` file | `index.php?route=/module/_ExportFamilyBook_/Graphml/<tree>` |
 
-- Each page has its own form with "Export Family Tree", "Download Settings", "Upload Settings" and (for
-  managers) "Save as default for this tree", and a link to the other page.
+- The two export pages have their own form with "Export Family Tree", "Download Settings", "Upload Settings"
+  and (for managers) "Save as default for this tree", and a link to the other export page.
 - **Reference individual**: chosen in the form with the individual search field. It is preselected with
   the individual of the page you came from (`xref` in the address), else the individual you used last in
   the form (saved per user and tree), else your default individual of the tree resp. the default individual
   of the tree. Settings files never set the reference individual.
 - **Access level**: Control panel → Modules → **Menus** → Family book. Without an entry for a tree only
   managers can see the menu and use the pages. All actions (page, export, download, upload, save) check it.
+  Only managers of the tree can save (default settings, image selection).
 - Earlier versions listed the module under "Charts". Their address (`.../Chart/<tree>?xref=...`)
   redirects to the new pages; `export_book=0` leads to the GraphML page.
+
+## Image selection
+
+The page **Image selection** shows the images that the family book would contain with the default
+settings of the tree (see below), in a grid with preview images, title, file name and individual:
+
+- The images are found exactly as by the LaTeX export: the individuals of the branches, the media of the
+  individual, of the families and of the facts, the media loops of the templates (`@ForeachMedia@` with its
+  type and file format filters) and the privacy rules of webtrees. Only the media loops of the templates are
+  processed, so the page is much faster than an export (several seconds for about 1000 images).
+  The reference individual is chosen as on the LaTeX page (`xref` in the address, else the one used last).
+- The images are grouped by individual, in the order of the book or alphabetically. An image linked to
+  several individuals is shown with each of them; the tick applies to the image.
+- Remove the tick to leave an image out of the book; such images are greyed out. Filters: all / included /
+  excluded images, search for a name, title or file, images changed since a date (date of the last change
+  of the media object; unknown for media without a change date), images new since the last review.
+- **Save selection** (managers only) updates `exclude_media.txt` in the folder of the tree. Only the IDs of
+  the images on the page are added or removed: comments, empty lines and IDs of other media stay, the other
+  files of the folder are not touched. If the folder or the file does not exist yet, it is created, starting
+  from the current list (e.g. from `export_latex_settings.local.json`).
+- Images in the list `include_media` are always in the book (it wins over `exclude_media`); the page shows
+  them with a locked tick.
+- **Mark as reviewed** (and saving) remembers the time per user and tree. "New since the last review" shows
+  the images whose media object was changed after that time. An older media object that was only linked to
+  an individual afterwards does not count as new. There is no filter "created since": webtrees keeps no
+  creation date of a media object (imported data have no change history).
 
 ## Settings files
 

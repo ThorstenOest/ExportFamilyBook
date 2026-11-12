@@ -59,6 +59,93 @@ class ExportFamilyBookData extends AbstractModule
     private ?WeakMap $record_cache = null;
     private $tag_label_cache = array();
 
+    // Collection of the media of the LaTeX export (page "Image selection", see collectLatexMedia).
+    // null during a normal export.
+    private ?array $media_collector = null;
+    // the individual whose template is processed (used by the collection)
+    private string $media_person = '';
+
+    /**
+     * Collect the media that the LaTeX export would include, without creating the book
+     *
+     * Runs exportLatex() with the same selection of individuals and the same media loops
+     * (@ForeachMedia with its type and file format filters), but only the parts of the
+     * templates that lead to a media loop are processed and nothing is written.
+     * The lists include_media and exclude_media are ignored, and media marked as "unique"
+     * are collected for each individual, so excluded media and all occurrences are listed.
+     * Media the current user may not see are skipped, as in the export.
+     *
+     * @param Tree $tree
+     * @param array<string,string> $parameter settings of the LaTeX form incl. refid
+     * @return array{persons: array<string,array<string,true>>, media: array<string,array{media: Media, files: array<string,\Fisharebest\Webtrees\MediaFile>}>}
+     *         persons: individual xref => media xrefs, both in the order of the book;
+     *         media: media xref => media object and the files used (file name => file)
+     */
+    public function collectLatexMedia(Tree $tree, array $parameter): array
+    {
+        $parameter['include_media'] = '';
+        $parameter['exclude_media'] = '';
+
+        // the export reads the settings from $_POST
+        $post = $_POST;
+        $_POST = $parameter;
+        $this->tree = $tree;
+        $this->media_collector = array('persons' => array(), 'media' => array());
+        $stream = fopen('php://memory', 'wb+');
+        try {
+            $this->exportLatex($stream);
+
+            return $this->media_collector;
+        } finally {
+            fclose($stream);
+            $this->media_collector = null;
+            $_POST = $post;
+        }
+    }
+
+    /**
+     * Reduce a split template to the parts needed to collect the media (see collectLatexMedia)
+     *
+     * Keeps the media loops (without their content) and the loops and terms containing them.
+     *
+     * @param array $comp component of a split template
+     * @return array|null null if the component contains no media loop
+     */
+    private function mediaOnlyTemplate(array $comp): ?array
+    {
+        if ($comp['type'] === 'foreach' && $comp['component'] === 'ForeachMedia') {
+            $comp['subtemplate'] = array();
+            return $comp;
+        }
+        if (($comp['type'] !== 'term' && $comp['type'] !== 'foreach') || !is_array($comp['subtemplate'])) {
+            return null;
+        }
+        $children = array();
+        foreach ($comp['subtemplate'] as $child) {
+            $child = $this->mediaOnlyTemplate($child);
+            if ($child !== null) {
+                $children[] = $child;
+            }
+        }
+        if ($children === array()) {
+            return null;
+        }
+        // the components of a term are numbered from 1 (see splitTemplate), the loop content from 0
+        $comp['subtemplate'] = ($comp['type'] === 'term') ? array_combine(range(1, count($children)), $children) : $children;
+
+        return $comp;
+    }
+
+    /**
+     * An empty template (used by the media collection if a template contains no media loop)
+     *
+     * @return array
+     */
+    private function emptyTemplate(): array
+    {
+        return array('component' => '', 'type' => 'term', 'format' => '', 'fact' => '', 'subtemplate' => array());
+    }
+
     /**
      * This function is called from ExportFamilyBook::postChartAction if mod_action is "export_latex" or "export_graphml".
      */
@@ -1931,7 +2018,8 @@ class ExportFamilyBookData extends AbstractModule
                                         }
 
                                         // check if media already shown
-                                        if ($use && $this->get_format($format, 2) == "unique") {
+                                        // (the media collection lists the media at each individual)
+                                        if ($use && $this->media_collector === null && $this->get_format($format, 2) == "unique") {
                                             if (in_array($id, $this->media_included)) {
                                                 $use = false;
                                             } else {
@@ -1968,6 +2056,14 @@ class ExportFamilyBookData extends AbstractModule
                                                     }
                                                 }
 
+                                                // collect the media file (page "Image selection")
+                                                if ($usefile && $this->media_collector !== null) {
+                                                    $this->media_collector['persons'][$this->media_person][$id] = true;
+                                                    $this->media_collector['media'][$id]['media'] = $media_record;
+                                                    $this->media_collector['media'][$id]['files'][$file->filename()] = $file;
+                                                    $tag_resolved = TRUE;
+                                                    continue;
+                                                }
                                                 // include media file in latex file
                                                 if ($usefile) {
                                                     $counter += 1;
@@ -3419,6 +3515,12 @@ class ExportFamilyBookData extends AbstractModule
         $summary_template = array();
         list($summary_template[0], $summary_brackets) = $this->splitTemplate($parameter["individuals_summary_label_template"]);
 
+        // media collection: only the media loops of the templates are processed
+        if ($this->media_collector !== null) {
+            $template[0] = $this->mediaOnlyTemplate($template[0]) ?? $this->emptyTemplate();
+            $summary_template[0] = $this->mediaOnlyTemplate($summary_template[0]) ?? $this->emptyTemplate();
+        }
+
         // get list of media to be included and excluded
         $this->include_exclude_media = array("include" => array(), "exclude" => array());
         foreach (array("include", "exclude") as $a) {
@@ -3477,8 +3579,10 @@ class ExportFamilyBookData extends AbstractModule
             $buffer .= '\end{compactenum}}';
         }
 
-        // now add bibliography
-        $buffer .= $this->getReferences();
+        // now add bibliography (not needed by the media collection)
+        if ($this->media_collector === null) {
+            $buffer .= $this->getReferences();
+        }
 
         // now add title
         $buffer .= $parameter["title"];
@@ -3568,6 +3672,7 @@ class ExportFamilyBookData extends AbstractModule
                                 // loop to create the output for the node label
                                 // and the node description
 
+                                $this->media_person = $xref;
                                 list($nodetext, $tag_resolved) = $this->substitutePlaceHolder(
                                     $record,
                                     $record,
@@ -3642,6 +3747,7 @@ class ExportFamilyBookData extends AbstractModule
                             // loop to create the output for the node label
                             // and the node description
 
+                            $this->media_person = $xref;
                             list($nodetext, $tag_resolved) = $this->substitutePlaceHolder(
                                 $record,
                                 $record,

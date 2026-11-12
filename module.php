@@ -48,11 +48,18 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
     // Further pages (e.g. selection of images, branches) are added here and in getMenu().
     private const PAGE_ACTIONS = array(
         'latex' => 'Latex',
+        'media' => 'Media',
         'graphml' => 'Graphml',
     );
 
     // User setting (per tree) with the reference individual used last in the form
     private const PREF_LAST_REFID = 'EFB_REFID_';
+
+    // User setting (per tree): time (Unix timestamp) of the last review of the image selection
+    private const PREF_MEDIA_REVIEW = 'EFB_MEDIA_REVIEW_';
+
+    // Size of the preview images on the page "Image selection" (pixels)
+    private const MEDIA_THUMBNAIL_SIZE = 160;
 
     private ResponseFactoryInterface $response_factory;
     private StreamFactoryInterface $stream_factory;
@@ -129,7 +136,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
      * The URL of the page of an export type
      *
      * @param Tree   $tree
-     * @param string $export_type 'latex' or 'graphml'
+     * @param string $export_type 'latex', 'media' (image selection) or 'graphml'
      * @param string $xref        reference individual to preselect in the form (optional)
      *
      * @return string
@@ -151,14 +158,16 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
     /**
      * Title of the page of an export type (also the label of its menu entry)
      *
-     * @param string $export_type 'latex' or 'graphml'
+     * @param string $export_type 'latex', 'media' or 'graphml'
      * @return string
      */
     public function pageTitle(string $export_type): string
     {
-        return $export_type === 'latex'
-            ? I18N::translate('Book (LaTeX)')
-            : I18N::translate('Family tree chart (GraphML)');
+        return match ($export_type) {
+            'latex' => I18N::translate('Book (LaTeX)'),
+            'media' => I18N::translate('Image selection'),
+            default => I18N::translate('Family tree chart (GraphML)'),
+        };
     }
 
 
@@ -197,6 +206,39 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 'Book (LaTeX)' => 'Buch (LaTeX)',
                 'Family tree chart (GraphML)' => 'Stammbaum-Grafik (GraphML)',
                 'Go to %s' => 'Weiter zu %s',
+                'Image selection' => 'Bilderauswahl',
+                'These are the images that the book would contain with the default settings of this family tree. Remove the tick to leave an image out of the book.' => 'Das sind die Bilder, die das Buch mit den Standard-Einstellungen dieses Stammbaums enthalten würde. Nimm den Haken weg, um ein Bild aus dem Buch wegzulassen.',
+                'An image linked to several individuals is shown with each of them. The tick applies to the image.' => 'Ein Bild, das mit mehreren Personen verknüpft ist, erscheint bei jeder davon. Der Haken gilt für das Bild.',
+                'Reference individual: %s' => 'Bezugsperson: %s',
+                'Order' => 'Reihenfolge',
+                'Order of the book' => 'Wie im Buch',
+                'Alphabetical' => 'Alphabetisch',
+                'Show' => 'Anzeigen',
+                'All images' => 'Alle Bilder',
+                'Only included images' => 'Nur Bilder im Buch',
+                'Only excluded images' => 'Nur weggelassene Bilder',
+                'Search' => 'Suche',
+                'Name, title or file' => 'Name, Titel oder Datei',
+                'Changed since' => 'Geändert seit',
+                'New since the last review' => 'Neu seit der letzten Durchsicht',
+                'Last review: %s' => 'Letzte Durchsicht: %s',
+                'Not reviewed yet' => 'Noch nicht durchgesehen',
+                'Save selection' => 'Auswahl speichern',
+                'Mark as reviewed' => 'Als durchgesehen markieren',
+                'In the book' => 'Im Buch',
+                'Always in the book (list “Include” of the settings)' => 'Immer im Buch (Liste „Include“ der Einstellungen)',
+                'Changed: %s' => 'Geändert: %s',
+                '%1$s images, %2$s of them left out' => '%1$s Bilder, davon %2$s weggelassen',
+                'Showing %1$s of %2$s images' => '%1$s von %2$s Bildern angezeigt',
+                'No images found.' => 'Keine Bilder gefunden.',
+                'Only managers of the family tree can change the image selection.' => 'Nur Verwalter des Stammbaums können die Bilderauswahl ändern.',
+                'The image selection has been saved.' => 'Die Bilderauswahl wurde gespeichert.',
+                'The image selection has not changed.' => 'Die Bilderauswahl ist unverändert.',
+                'The image selection could not be saved: %s' => 'Die Bilderauswahl konnte nicht gespeichert werden: %s',
+                'The selection contains images that are not part of the book: %s' => 'Die Auswahl enthält Bilder, die nicht zum Buch gehören: %s',
+                'The images have been marked as reviewed.' => 'Die Bilder wurden als durchgesehen markiert.',
+                'There are unsaved changes.' => 'Es gibt ungespeicherte Änderungen.',
+                'Unsaved changes: %s' => 'Ungespeicherte Änderungen: %s',
             ];
         }
 
@@ -338,6 +380,210 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
     public function postGraphmlAction(ServerRequestInterface $request): ResponseInterface
     {
         return $this->handleForm($request, 'graphml');
+    }
+
+    /**
+     * Page "Image selection": the images of the book, with ticks to leave images out
+     */
+    public function getMediaAction(ServerRequestInterface $request): ResponseInterface
+    {
+        $tree = $request->getAttribute('tree');
+        assert($tree instanceof Tree);
+        $this->checkAccess($request, $tree);
+        $individual = $this->referenceIndividual($request, $tree);
+        $user = Validator::attributes($request)->user();
+        $review = (int) $user->getPreference(self::PREF_MEDIA_REVIEW . $tree->id(), '0');
+
+        $selection = $this->mediaSelection($tree, $individual);
+
+        return $this->viewResponse($this->name() . '::media', array_merge(
+            $this->mediaPageData($tree, $selection, $review),
+            [
+                'title' => I18N::translate('Family book') . ' – ' . $this->pageTitle('media'),
+                'tree' => $tree,
+                'individual' => $individual,
+                'review' => $review,
+                'can_save' => Auth::isManager($tree, $user),
+                'form_url' => $this->pageUrl($tree, 'media', $individual?->xref() ?? ''),
+                'latex_url' => $this->pageUrl($tree, 'latex', $individual?->xref() ?? ''),
+                'latex_title' => $this->pageTitle('latex'),
+            ]
+        ));
+    }
+
+    /**
+     * Forms of the page "Image selection": save the selection, mark as reviewed (managers only)
+     */
+    public function postMediaAction(ServerRequestInterface $request): ResponseInterface
+    {
+        $tree = $request->getAttribute('tree');
+        assert($tree instanceof Tree);
+        $this->checkAccess($request, $tree);
+        $user = Validator::attributes($request)->user();
+        $individual = $this->referenceIndividual($request, $tree);
+        $url = $this->pageUrl($tree, 'media', $individual?->xref() ?? '');
+
+        if (!Auth::isManager($tree, $user)) {
+            FlashMessages::addMessage(e(I18N::translate('Only managers of the family tree can change the image selection.')), 'danger');
+            return redirect($url);
+        }
+
+        $body = $request->getParsedBody();
+        $mod_action = is_array($body) && is_string($body['mod_action'] ?? null) ? $body['mod_action'] : '';
+        $posted = is_array($body) && is_string($body['exclude'] ?? null) ? $body['exclude'] : '';
+
+        if ($mod_action === 'review_media') {
+            $user->setPreference(self::PREF_MEDIA_REVIEW . $tree->id(), (string) time());
+            FlashMessages::addMessage(e(I18N::translate('The images have been marked as reviewed.')), 'success');
+        } elseif ($mod_action === 'save_media') {
+            $selection = $this->mediaSelection($tree, $individual);
+
+            // the images of the page (upper case => xref); images of the include list cannot be left out
+            $all = array();
+            foreach (array_keys($selection['collected']['media']) as $xref) {
+                $all[strtoupper((string) $xref)] = (string) $xref;
+            }
+            $managed = array_diff_key($all, $selection['include']);
+
+            // the IDs sent by the form must be images of the page
+            $exclude = array();
+            $unknown = array();
+            foreach (explode(',', $posted) as $xref) {
+                $xref = trim($xref);
+                if ($xref === '') {
+                    continue;
+                }
+                $key = strtoupper($xref);
+                if (!array_key_exists($key, $all)) {
+                    $unknown[] = $xref;
+                } elseif (array_key_exists($key, $managed)) {
+                    $exclude[$key] = $all[$key];
+                }
+            }
+
+            if ($unknown !== array()) {
+                FlashMessages::addMessage(e(I18N::translate('The selection contains images that are not part of the book: %s', implode(', ', array_slice($unknown, 0, 10)))), 'danger');
+            } else {
+                try {
+                    $changed = $this->saveExcludeMedia($tree, $managed, $exclude, $selection['exclude_value']);
+                    $user->setPreference(self::PREF_MEDIA_REVIEW . $tree->id(), (string) time());
+                    FlashMessages::addMessage(e($changed
+                        ? I18N::translate('The image selection has been saved.')
+                        : I18N::translate('The image selection has not changed.')), 'success');
+                } catch (FilesystemException $ex) {
+                    FlashMessages::addMessage(e(I18N::translate('The image selection could not be saved: %s', $ex->getMessage())), 'danger');
+                }
+            }
+        }
+
+        return redirect($url);
+    }
+
+    /**
+     * The images of the book with the default settings of the tree
+     *
+     * Uses the selection of the LaTeX export (individuals of the branches, media loops of the templates,
+     * privacy), see ExportFamilyBookData::collectLatexMedia().
+     *
+     * @param Tree $tree
+     * @param Individual|null $individual reference individual
+     * @return array{collected: array, include: array<string,true>, exclude: array<string,true>, exclude_value: string}
+     *         include/exclude: media IDs (upper case) of the lists include_media/exclude_media
+     */
+    private function mediaSelection(Tree $tree, ?Individual $individual): array
+    {
+        $settings = $this->readDefaultSettings('latex', $tree);
+        $settings['refid'] = $individual?->xref() ?? '';
+
+        return array(
+            'collected' => (new ExportFamilyBookData())->collectLatexMedia($tree, $settings),
+            'include' => $this->mediaIdSet($settings['include_media'] ?? ''),
+            'exclude' => $this->mediaIdSet($settings['exclude_media'] ?? ''),
+            'exclude_value' => $settings['exclude_media'] ?? '',
+        );
+    }
+
+    /**
+     * The media IDs of a list (as the export reads it: comma separated, upper case)
+     *
+     * @param string $value
+     * @return array<string,true>
+     */
+    private function mediaIdSet(string $value): array
+    {
+        $ids = array();
+        foreach (explode(',', $this->decodeListFile($value)) as $id) {
+            if ($id !== '') {
+                $ids[strtoupper($id)] = true;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * Data of the page "Image selection" for the view
+     *
+     * @param Tree $tree
+     * @param array $selection see mediaSelection()
+     * @param int $review time of the last review (0: never)
+     * @return array{items: array<string,array>, groups: array<int,array>, count: int, excluded: int}
+     */
+    private function mediaPageData(Tree $tree, array $selection, int $review): array
+    {
+        $plain = static fn (string $html): string => html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+        $items = array();
+        $excluded = 0;
+        foreach ($selection['collected']['media'] as $xref => $entry) {
+            $media = $entry['media'];
+            $key = strtoupper((string) $xref);
+            $state = array_key_exists($key, $selection['include'])
+                ? 'include'
+                : (array_key_exists($key, $selection['exclude']) ? 'exclude' : 'book');
+            if ($state === 'exclude') {
+                $excluded++;
+            }
+            $changed = $media->lastChangeTimestamp();
+            $files = array_values($entry['files']);
+            $title = $plain($media->fullName());
+            $items[(string) $xref] = array(
+                'xref' => (string) $xref,
+                'title' => $title,
+                'url' => $media->url(),
+                'files' => array_keys($entry['files']),
+                'file' => $files[0],
+                'state' => $state,
+                'changed' => $changed->timestamp() > 0 ? $changed->format('Y-m-d') : '',
+                'changed_text' => $changed->timestamp() > 0 ? $changed->isoFormat('LL') : '',
+                'new' => $changed->timestamp() > $review,
+                'search' => mb_strtolower($title . ' ' . implode(' ', array_keys($entry['files']))),
+            );
+        }
+
+        $groups = array();
+        foreach ($selection['collected']['persons'] as $xref => $media_xrefs) {
+            $individual = Registry::individualFactory()->make((string) $xref, $tree);
+            if (!$individual instanceof Individual) {
+                continue;
+            }
+            $name = $plain($individual->fullName());
+            $groups[] = array(
+                'name' => $name,
+                'sort' => $plain($individual->sortName()),
+                'url' => $individual->url(),
+                'media' => array_map('strval', array_keys($media_xrefs)),
+                'search' => mb_strtolower($name),
+            );
+        }
+
+        return array(
+            'items' => $items,
+            'groups' => $groups,
+            'count' => count($items),
+            'excluded' => $excluded,
+            'thumbnail_size' => self::MEDIA_THUMBNAIL_SIZE,
+        );
     }
 
     /**
@@ -1178,6 +1424,108 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
 
     /**
+     * Save the image selection: update exclude_media.txt in the folder of the tree
+     *
+     * Only the IDs of the images on the page are added or removed; all other lines, IDs and
+     * comments of the file stay as they are. Without the file, the current list (taken from the
+     * module folder) is the starting point. The folder is created if necessary.
+     *
+     * @param Tree $tree
+     * @param array<string,string> $managed images of the page that can be left out (upper case => xref)
+     * @param array<string,string> $exclude images to leave out (upper case => xref)
+     * @param string $current the current list exclude_media (comma separated)
+     * @return bool false if nothing has changed
+     * @throws FilesystemException
+     */
+    private function saveExcludeMedia(Tree $tree, array $managed, array $exclude, string $current): bool
+    {
+        $data = Registry::filesystem()->data();
+        $folder = $this->treeSettingsFolder($tree, 'latex');
+        $file = $folder . '/exclude_media.txt';
+
+        $old = $data->fileExists($file) ? $data->read($file) : $this->encodeListFile($current);
+        $new = $this->updateExcludeList($old, $managed, $exclude);
+        if ($new === $old) {
+            return false;
+        }
+
+        $data->createDirectory($folder);
+        $data->write($file, $new);
+        if (!$data->fileExists($folder . '/README.txt')) {
+            $data->write($folder . '/README.txt', $this->treeSettingsReadme('latex'));
+        }
+
+        return true;
+    }
+
+
+    /**
+     * Change a list file of media IDs (format see decodeListFile)
+     *
+     * IDs of $managed that are not in $exclude are removed, IDs of $exclude that are missing are
+     * added at the end (one per line). Lines without a change, empty lines, comments and IDs not in
+     * $managed are kept as they are. If all IDs of a line are removed, its comment is kept.
+     * The line endings of the file are kept.
+     *
+     * @param string $content the content of the file
+     * @param array<string,string> $managed IDs that may be changed (upper case => ID)
+     * @param array<string,string> $exclude IDs that must be in the list (upper case => ID)
+     * @return string
+     */
+    public function updateExcludeList(string $content, array $managed, array $exclude): string
+    {
+        $eol = str_contains($content, "\r\n") ? "\r\n" : "\n";
+        $content = (string) preg_replace('/^\xEF\xBB\xBF/', '', $content);
+        $lines = ($content === '') ? array() : preg_split('/\r\n|\r|\n/', $content);
+        if ($lines !== array() && end($lines) === '') {
+            array_pop($lines);
+        }
+
+        $present = array();
+        $result = array();
+        foreach ($lines as $line) {
+            $pos = strpos($line, '#');
+            $ids_part = ($pos === false) ? $line : substr($line, 0, $pos);
+            $comment = ($pos === false) ? '' : substr($line, $pos);
+
+            $ids = array();
+            foreach (explode(',', $ids_part) as $id) {
+                $id = trim($id);
+                if ($id !== '') {
+                    $ids[] = $id;
+                }
+            }
+
+            $keep = array();
+            foreach ($ids as $id) {
+                $key = strtoupper($id);
+                if (array_key_exists($key, $managed) && !array_key_exists($key, $exclude)) {
+                    continue;
+                }
+                $keep[] = $id;
+                $present[$key] = true;
+            }
+
+            if ($keep === $ids) {
+                $result[] = $line;
+            } elseif ($keep !== array()) {
+                $result[] = implode(',', $keep) . ($comment === '' ? '' : ' ' . $comment);
+            } elseif ($comment !== '') {
+                $result[] = $comment;
+            }
+        }
+
+        foreach ($exclude as $key => $id) {
+            if (!array_key_exists($key, $present)) {
+                $result[] = $id;
+            }
+        }
+
+        return ($result === array()) ? '' : implode($eol, $result) . $eol;
+    }
+
+
+    /**
      * Table row with the button to save the form as default settings of the tree (managers only)
      *
      * @param Tree $tree
@@ -1252,6 +1600,9 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             'When saving, only files whose value has changed are written; README.txt is never overwritten.',
             'Comments in a list file are lost when the list is changed in the form and saved.',
         );
+        if ($export_type === 'latex') {
+            $lines[] = 'The page "Image selection" of the module changes exclude_media.txt and keeps its comments.';
+        }
 
         return implode("\n", $lines) . "\n";
     }
@@ -1911,7 +2262,8 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 		 */
         echo '<tr><td class="descriptionbox width30 wrap" colspan="7">', I18N::translate(
             'Include and exclude media objects'
-        ), '</td></tr>';
+        ), ' – <a href="', e($this->pageUrl($tree, 'media', $individual?->xref() ?? '')), '">',
+            e($this->pageTitle('media')), '</a></td></tr>';
 
         echo '<tr><td class="descriptionbox width30 wrap">', I18N::translate(
             "Include"
