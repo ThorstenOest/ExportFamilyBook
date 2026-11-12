@@ -17,9 +17,9 @@ use Fisharebest\Webtrees\I18N;
 use Fisharebest\Webtrees\Individual;
 use Fisharebest\Webtrees\Module\AbstractModule;
 use Fisharebest\Webtrees\Module\ModuleCustomInterface;
-use Fisharebest\Webtrees\Module\ModuleChartInterface;
+use Fisharebest\Webtrees\Module\ModuleMenuInterface;
 use Fisharebest\Webtrees\Module\ModuleCustomTrait;
-use Fisharebest\Webtrees\Module\ModuleChartTrait;
+use Fisharebest\Webtrees\Module\ModuleMenuTrait;
 use Fisharebest\Webtrees\Menu;
 use Fisharebest\Webtrees\View;
 use Fisharebest\Webtrees\Tree;
@@ -34,11 +34,25 @@ use League\Flysystem\FilesystemException;
 /**
  * Main class for FamilyBookExport module
  */
-class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, ModuleChartInterface
+class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, ModuleMenuInterface
 {
 
     use ModuleCustomTrait;
-    use ModuleChartTrait;
+    use ModuleMenuTrait;
+
+    // Access level if Control panel > Modules > Menus has no entry for this module and tree: managers only.
+    // webtrees 2.2 has no defaultAccessLevel(); AbstractModule::accessLevel() falls back to this property.
+    protected int $access_level = Auth::PRIV_NONE;
+
+    // Pages of the menu "Family book": export type => module action (getLatexAction, postLatexAction, ...)
+    // Further pages (e.g. selection of images, branches) are added here and in getMenu().
+    private const PAGE_ACTIONS = array(
+        'latex' => 'Latex',
+        'graphml' => 'Graphml',
+    );
+
+    // User setting (per tree) with the reference individual used last in the form
+    private const PREF_LAST_REFID = 'EFB_REFID_';
 
     private ResponseFactoryInterface $response_factory;
     private StreamFactoryInterface $stream_factory;
@@ -112,25 +126,39 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
     }
 
     /**
-     * The URL for a page showing chart options.
+     * The URL of the page of an export type
      *
-     * @param Individual                                $individual
-     * @param array<bool|int|string|array<string>|null> $parameters
+     * @param Tree   $tree
+     * @param string $export_type 'latex' or 'graphml'
+     * @param string $xref        reference individual to preselect in the form (optional)
      *
      * @return string
      */
-    public function chartUrl(Individual $individual, array $parameters = []): string
+    public function pageUrl(Tree $tree, string $export_type, string $xref = ''): string
     {
-        if (!in_array('settings', $parameters)) {
-            $settings = null;
-            array_push($parameters, $settings);
-        };
-        return route('module', [
+        $parameters = [
             'module' => $this->name(),
-            'action' => 'Chart',
-            'xref'   => $individual->xref(),
-            'tree'    => $individual->tree()->name(),
-        ] + $parameters);
+            'action' => self::PAGE_ACTIONS[$export_type],
+            'tree'   => $tree->name(),
+        ];
+        if ($xref !== '') {
+            $parameters['xref'] = $xref;
+        }
+
+        return route('module', $parameters);
+    }
+
+    /**
+     * Title of the page of an export type (also the label of its menu entry)
+     *
+     * @param string $export_type 'latex' or 'graphml'
+     * @return string
+     */
+    public function pageTitle(string $export_type): string
+    {
+        return $export_type === 'latex'
+            ? I18N::translate('Book (LaTeX)')
+            : I18N::translate('Family tree chart (GraphML)');
     }
 
 
@@ -155,106 +183,230 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         return I18N::translate('This is a module to export a tree in Latex (as family book) or GraphML (as chart) format.');
     }
 
-    public function chartMenuClass(): string
+    /**
+     * Translations of the texts of the menu and the pages
+     *
+     * @param string $language
+     * @return array<string,string>
+     */
+    public function customTranslations(string $language): array
     {
-        return 'menu-chart-familybook';
+        if (str_starts_with($language, 'de')) {
+            return [
+                'Family book' => 'Familienbuch',
+                'Book (LaTeX)' => 'Buch (LaTeX)',
+                'Family tree chart (GraphML)' => 'Stammbaum-Grafik (GraphML)',
+                'Go to %s' => 'Weiter zu %s',
+            ];
+        }
+
+        return [];
     }
 
     /**
-     * A menu item for this chart for an individual box in a chart.
+     * The default position of the menu "Family book" (after "Reports")
      *
-     * @param Individual $individual
-     *
-     * @return Menu|null
+     * @return int
      */
-    public function chartBoxMenu(Individual $individual): ?Menu
+    public function defaultMenuOrder(): int
     {
-        return $this->chartMenu($individual);
+        return 6;
     }
 
     /**
-     * A function to return the current individual logged in.
+     * The menu "Family book" in the main navigation, with one entry per page
      *
-     * @param Individual $individual
-     *
+     * @param Tree $tree
      * @return Menu|null
      */
-    public function getIndividual($tree, $xref): Individual
+    public function getMenu(Tree $tree): ?Menu
     {
+        // webtrees filters the menus by the access level, too; check it here as well
+        if ($this->accessLevel($tree, ModuleMenuInterface::class) < Auth::accessLevel($tree, Auth::user())) {
+            return null;
+        }
+
+        // the individual of the current page (if any) becomes the reference individual of the form
+        $request = Registry::container()->get(ServerRequestInterface::class);
+        $xref    = Validator::attributes($request)->isXref()->string('xref', '');
+
+        $submenus = array();
+        foreach (array_keys(self::PAGE_ACTIONS) as $export_type) {
+            $submenus[] = new Menu(
+                $this->pageTitle($export_type),
+                $this->pageUrl($tree, $export_type, $xref),
+                'menu-familybook-' . $export_type,
+                ['rel' => 'nofollow']
+            );
+        }
+
+        // menu-report: icon of the reports menu in the standard themes
+        return new Menu(I18N::translate('Family book'), '#', 'menu-report menu-familybook', ['rel' => 'nofollow'], $submenus);
+    }
+
+    /**
+     * The reference individual preselected in the form
+     *
+     * Order: refid of the submitted form, xref of the URL, the individual used last in the form
+     * (setting of the user per tree), the default individual of the user resp. of the tree
+     * (Tree::significantIndividual). Individuals that the user may not see are skipped.
+     *
+     * @param ServerRequestInterface $request
+     * @param Tree $tree
+     * @return Individual|null
+     */
+    public function referenceIndividual(ServerRequestInterface $request, Tree $tree): ?Individual
+    {
+        $user = Auth::user();
+        $body = $request->getParsedBody();
+        $candidates = array(
+            is_array($body) && is_string($body['refid'] ?? null) ? $body['refid'] : '',
+            Validator::queryParams($request)->isXref()->string('xref', ''),
+            Auth::check() ? $user->getPreference(self::PREF_LAST_REFID . $tree->id()) : '',
+        );
+        foreach ($candidates as $xref) {
+            if ($xref !== '') {
+                $individual = Registry::individualFactory()->make($xref, $tree);
+                if ($individual instanceof Individual && $individual->canShow()) {
+                    return $individual;
+                }
+            }
+        }
+
+        $individual = $tree->significantIndividual($user);
+
+        return $individual->canShow() ? $individual : null;
+    }
+
+    /**
+     * Remember the reference individual of the submitted form for the next visit (logged in users only)
+     *
+     * @param ServerRequestInterface $request
+     * @param Tree $tree
+     */
+    private function rememberReferenceIndividual(ServerRequestInterface $request, Tree $tree): void
+    {
+        $body = $request->getParsedBody();
+        $xref = is_array($body) && is_string($body['refid'] ?? null) ? $body['refid'] : '';
+        if ($xref === '' || !Auth::check()) {
+            return;
+        }
         $individual = Registry::individualFactory()->make($xref, $tree);
-        $individual = Auth::checkIndividualAccess($individual, false, true);
-
-        return $individual;
+        if ($individual instanceof Individual && $individual->canShow()) {
+            Auth::user()->setPreference(self::PREF_LAST_REFID . $tree->id(), $individual->xref());
+        }
     }
 
     /**
-     * Enforce the access level set in Control panel > Modules > Charts.
-     * webtrees only hides the menu entry; the module's actions must check it themselves.
-     * Throws HttpAccessDeniedException if the current user may not use this chart.
+     * Enforce the access level set in Control panel > Modules > Menus.
+     * webtrees only hides the menu; the module's actions must check it themselves.
+     * Throws HttpAccessDeniedException if the current user may not use this module.
      */
     private function checkAccess(ServerRequestInterface $request, Tree $tree): void
     {
         $user = Validator::attributes($request)->user();
-        Auth::checkComponentAccess($this, ModuleChartInterface::class, $tree, $user);
+        Auth::checkComponentAccess($this, ModuleMenuInterface::class, $tree, $user);
     }
 
     /**
-     * This function is called when the menu chart-button is hit to open the export definition page or when the "Change export type" button on the definition page is hit calling $module->chartUrl.
-     *
-     * @param Individual $individual
-     *
-     * @return Menu|null
+     * Page of the LaTeX export (family book)
      */
-    public function getChartAction(ServerRequestInterface $request, ?array $settings = null): ResponseInterface
+    public function getLatexAction(ServerRequestInterface $request): ResponseInterface
     {
+        return $this->showPage($request, 'latex');
+    }
 
+    /**
+     * Forms of the LaTeX page (export, download, upload, save as default)
+     */
+    public function postLatexAction(ServerRequestInterface $request): ResponseInterface
+    {
+        return $this->handleForm($request, 'latex');
+    }
+
+    /**
+     * Page of the GraphML export (family tree chart)
+     */
+    public function getGraphmlAction(ServerRequestInterface $request): ResponseInterface
+    {
+        return $this->showPage($request, 'graphml');
+    }
+
+    /**
+     * Forms of the GraphML page (export, download, upload, save as default)
+     */
+    public function postGraphmlAction(ServerRequestInterface $request): ResponseInterface
+    {
+        return $this->handleForm($request, 'graphml');
+    }
+
+    /**
+     * Old address of the module as a chart (.../Chart/<tree>?xref=...&export_book=0|1):
+     * redirect to the page of the export type
+     */
+    public function getChartAction(ServerRequestInterface $request): ResponseInterface
+    {
         $tree = $request->getAttribute('tree');
         assert($tree instanceof Tree);
         $this->checkAccess($request, $tree);
-        $individual = $this->getIndividual($tree, $request->getQueryParams()['xref']);
-        $queryParams = $request->getQueryParams();
 
-        // set the export_book variable according to the get-parameter 'export_book'
-        if (array_key_exists('export_book', $queryParams)) {
-            $export_book = $queryParams['export_book'];
-        } else {
-            $export_book = true;
-        };
+        $export_type = Validator::queryParams($request)->string('export_book', '1') === '0' ? 'graphml' : 'latex';
+        $xref = Validator::queryParams($request)->isXref()->string('xref', '');
 
-        // set the page_title variable according to the get-parameter 'export_book'
-        if ($export_book) {
-            $page_title = 'Export Family Book';
-        } else {
-            $page_title = 'Export GraphML';
-        };
+        return redirect($this->pageUrl($tree, $export_type, $xref));
+    }
+
+    /**
+     * Forms of old pages (old address): redirect to the page of the export type
+     */
+    public function postChartAction(ServerRequestInterface $request): ResponseInterface
+    {
+        return $this->getChartAction($request);
+    }
+
+    /**
+     * Show the page of an export type
+     *
+     * @param ServerRequestInterface $request
+     * @param string $export_type 'latex' or 'graphml'
+     * @param array|null $settings settings of the form (null: default settings)
+     * @return ResponseInterface
+     */
+    private function showPage(ServerRequestInterface $request, string $export_type, ?array $settings = null): ResponseInterface
+    {
+        $tree = $request->getAttribute('tree');
+        assert($tree instanceof Tree);
+        $this->checkAccess($request, $tree);
+        $individual = $this->referenceIndividual($request, $tree);
+
+        $other_type = $export_type === 'latex' ? 'graphml' : 'latex';
 
         // open resources\views\page.phtml and pass parameter to the page
         return $this->viewResponse($this->name() . '::page', [
             'tree' => $tree,
             'individual' => $individual,
-            'title' => $page_title,
+            'title' => I18N::translate('Family book') . ' – ' . $this->pageTitle($export_type),
             'module' => $this,
-            'export_book' => $export_book,
+            'export_type' => $export_type,
+            'other_url' => $this->pageUrl($tree, $other_type, $individual === null ? '' : $individual->xref()),
+            'other_title' => $this->pageTitle($other_type),
             'settings' => $settings
         ]);
     }
 
-
     /**
-     *  Defined in InteractiveTreeModule.php. It is called for form action of method post, e.g.
-     * <form action='<?= $module->chartUrl($individual, ['export_book' => !$export_book]) ?>' method='post'>
-     * The call is generated in the function ModuleSection::handle
+     * Handle the forms of a page. The button pressed is passed in mod_action.
      *
-     * @param Individual $individual
-     *
-     * @return Menu|null
+     * @param ServerRequestInterface $request
+     * @param string $page_type export type of the page, 'latex' or 'graphml'
+     * @return ResponseInterface
      */
-    public function postChartAction(ServerRequestInterface $request): ResponseInterface
+    private function handleForm(ServerRequestInterface $request, string $page_type): ResponseInterface
     {
         $tree = $request->getAttribute('tree');
         assert($tree instanceof Tree);
         $this->checkAccess($request, $tree);
-        //$individual = $this->getIndividual($tree, $request->getQueryParams()['xref']);
+        $this->rememberReferenceIndividual($request, $tree);
 
         $parsedBodys = $request->getParsedBody();
 
@@ -267,6 +419,10 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         } else {
             $mod_action = "";
         };
+        // each page handles only the actions of its own export type
+        if (!is_string($mod_action) || !str_ends_with($mod_action, '_' . $page_type)) {
+            $mod_action = "";
+        }
 
         switch ($mod_action) {
             case "export_graphml":
@@ -355,7 +511,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                     }
                 }
                 // exit;
-                $response = $this->getChartAction($request, $settings);
+                $response = $this->showPage($request, $page_type, $settings);
                 break;
             case "save_tree_settings_graphml":
             case "save_tree_settings_latex":
@@ -374,11 +530,10 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                         FlashMessages::addMessage(e(I18N::translate('The settings could not be saved in %s: %s', Registry::filesystem()->dataName() . $folder, $ex->getMessage())), 'danger');
                     }
                 }
-                $response = $this->getChartAction($request, $settings);
+                $response = $this->showPage($request, $page_type, $settings);
                 break;
-            case "change_export_type":
             default:
-                $response = $this->getChartAction($request, $settings);
+                $response = $this->showPage($request, $page_type, $settings);
                 break;
         }
 
@@ -1112,7 +1267,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
      * @param array $settings
      *        	The setting in the form
      */
-    public function setParameterGraphml(?array $settings, Tree $tree, Individual $individual)
+    public function setParameterGraphml(?array $settings, Tree $tree, ?Individual $individual)
     {
 
         // fill read settings if not passed
@@ -1122,7 +1277,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         // header
         echo '<div id="reportengine-page">
-            <form action=\'' . e($this->chartUrl($individual, ['export_book' => false])) . '\' name="setupreport" enctype="multipart/form-data" method="post">',
+            <form action=\'' . e($this->pageUrl($tree, 'graphml', $individual?->xref() ?? '')) . '\' name="setupreport" enctype="multipart/form-data" method="post">',
         csrf_field();
 
         echo '<table class="facts_table width50">
@@ -1523,7 +1678,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         //echo '<form name="upload" enctype="multipart/form-data" method="POST" 
         //		action="module.php?mod=' . $this->getName () .
         //		 '&mod_action=upload_settings_graphml">';
-        echo '<form action=\'' . e($this->chartUrl($individual, ['export_book' => false])) . '\' name="upload" enctype="multipart/form-data" method="post">',
+        echo '<form action=\'' . e($this->pageUrl($tree, 'graphml', $individual?->xref() ?? '')) . '\' name="upload" enctype="multipart/form-data" method="post">',
         csrf_field();
 
         //echo '<form name="upload" enctype="multipart/form-data" method="POST" 
@@ -1561,7 +1716,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
      * @param array $settings
      *        	The setting in the form
      */
-    public function setParameterLatex(?array $settings, Tree $tree, Individual $individual)
+    public function setParameterLatex(?array $settings, Tree $tree, ?Individual $individual)
     {
         $help_text = $this->helpScript($this->getHelpText("latex"));
 
@@ -1572,7 +1727,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         // header line 
         echo '<div id="reportengine-page">
-				<form action=\'' . e($this->chartUrl($individual, ['export_book' => true])) . '\' name="setupreport" enctype="multipart/form-data" method="post">',
+				<form action=\'' . e($this->pageUrl($tree, 'latex', $individual?->xref() ?? '')) . '\' name="setupreport" enctype="multipart/form-data" method="post">',
         csrf_field();
 
         echo '<table class="facts_table width50">
@@ -1865,7 +2020,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             'Upload/Download Settings'
         ), '</td></tr>';
         // header line of the form
-        echo '<form action=\'' . e($this->chartUrl($individual, ['export_book' => true])) . '\' name="upload" enctype="multipart/form-data" method="post">',
+        echo '<form action=\'' . e($this->pageUrl($tree, 'latex', $individual?->xref() ?? '')) . '\' name="upload" enctype="multipart/form-data" method="post">',
         csrf_field();
 
         //echo '<form name="upload" enctype="multipart/form-data" method="POST" 

@@ -1,6 +1,27 @@
 # ExportFamilyBook
 A Module for Webtrees 2.0 to export a tree as a family book or graphml file
 
+## Usage
+
+The module adds the menu **Family book** ("Familienbuch" in German) to the main navigation of a tree.
+It has one entry per page:
+
+| Menu entry | Page | Address |
+|---|---|---|
+| Book (LaTeX) | export of the family book as a `.tex` file | `index.php?route=/module/_ExportFamilyBook_/Latex/<tree>` |
+| Family tree chart (GraphML) | export of the chart as a `.graphml` file | `index.php?route=/module/_ExportFamilyBook_/Graphml/<tree>` |
+
+- Each page has its own form with "Export Family Tree", "Download Settings", "Upload Settings" and (for
+  managers) "Save as default for this tree", and a link to the other page.
+- **Reference individual**: chosen in the form with the individual search field. It is preselected with
+  the individual of the page you came from (`xref` in the address), else the individual you used last in
+  the form (saved per user and tree), else your default individual of the tree resp. the default individual
+  of the tree. Settings files never set the reference individual.
+- **Access level**: Control panel → Modules → **Menus** → Family book. Without an entry for a tree only
+  managers can see the menu and use the pages. All actions (page, export, download, upload, save) check it.
+- Earlier versions listed the module under "Charts". Their address (`.../Chart/<tree>?xref=...`)
+  redirects to the new pages; `export_book=0` leads to the GraphML page.
+
 ## Settings files
 
 "Download Settings" saves the settings of the form as a readable JSON file

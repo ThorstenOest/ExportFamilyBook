@@ -20,23 +20,17 @@ $escaped_help_content = json_encode($html_help_content, JSON_HEX_TAG | JSON_HEX_
 
 <h1><?= e($title) ?></h1>
 <p>
-    <!-- Add a a from to change the export type, either as a book or as a graph -->
-<form action='<?= e($module->chartUrl($individual, ['export_book' => !$export_book])) ?>' 
-method='post' style="display: inline-block; vertical-align: top; margin-right: 20px;">
-    <?= csrf_field() ?> <!-- add a csrf token, needed to run the code -->
-    <button type="submit" name="mod_action" value="change_export_type"><?= I18N::translate('Change export type')?></button>
-</form>
+    <!-- Link to the page of the other export type -->
+    <a href="<?= e($other_url) ?>" style="margin-right: 20px;"><?= e(I18N::translate('Go to %s', $other_title)) ?></a>
 
-<button onclick="openPopup()"><?= I18N::translate('Open Help Window')?></button>
-
-<!--- <button type="submit" name="mod_action" value="help" style="display: inline-block; vertical-align: top;"><?= I18N::translate('Help') ?></button> -->
+    <button onclick="openPopup()"><?= I18N::translate('Open Help Window')?></button>
 </p>
 
 <?php
 
 // -------------------------------------------------------------------------------
-// read the input data from the file export_latex_settings.txt resp. export_graphml_settings.txt
-if ($export_book) {
+// form with the settings (default settings of the tree resp. module, or the uploaded settings)
+if ($export_type === 'latex') {
     $module->setParameterLatex($settings, $tree, $individual);
 } else {
     $module->setParameterGraphml($settings, $tree, $individual);
