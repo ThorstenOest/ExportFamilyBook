@@ -10,6 +10,7 @@ It has one entry per page:
 |---|---|---|
 | Book (LaTeX) | export of the family book as a `.tex` file | `index.php?route=/module/_ExportFamilyBook_/Latex/<tree>` |
 | Image selection | choose the images of the family book (see below) | `index.php?route=/module/_ExportFamilyBook_/Media/<tree>` |
+| Branches and sets ("Zweige") | edit the list of branches as a table, switch branches on and off, named sets (see below) | `index.php?route=/module/_ExportFamilyBook_/Branches/<tree>` (`&list=graphml` for the chart) |
 | Family tree chart (GraphML) | export of the chart as a `.graphml` file | `index.php?route=/module/_ExportFamilyBook_/Graphml/<tree>` |
 
 - The two export pages have their own form with "Export Family Tree", "Download Settings", "Upload Settings"
@@ -20,7 +21,7 @@ It has one entry per page:
   of the tree. Settings files never set the reference individual.
 - **Access level**: Control panel → Modules → **Menus** → Family book. Without an entry for a tree only
   managers can see the menu and use the pages. All actions (page, export, download, upload, save) check it.
-  Only managers of the tree can save (default settings, image selection).
+  Only managers of the tree can save (default settings, image selection, branches and sets).
 - Earlier versions listed the module under "Charts". Their address (`.../Chart/<tree>?xref=...`)
   redirects to the new pages; `export_book=0` leads to the GraphML page.
 
@@ -49,6 +50,103 @@ settings of the tree (see below), in a grid with preview images, title, file nam
   the images whose media object was changed after that time. An older media object that was only linked to
   an individual afterwards does not count as new. There is no filter "created since": webtrees keeps no
   creation date of a media object (imported data have no change history).
+
+## Branches and sets
+
+The setting **Seeds** (`branch_seeds`) divides the book and the chart into branches. The page
+**Branches and sets** shows this list as a table with one row per branch, so you do not have to edit the
+text field of the export pages (it stays available there):
+
+- **Exported**: remove the tick to leave the individuals of a branch out of the book resp. the chart
+  (column 7 `exclude`). **All on** / **All off** switch all branches.
+- **Start individual** and **stop individuals** are shown with name and life span; choose them with the
+  individual search of webtrees. **Name of the branch**, **direction** (both directions, towards the parents,
+  towards spouses and children). The order of the rows is the order of the branches in the book: drag a
+  row by its handle or use the arrows.
+- **Headings** (book only, "Show headings"): the heading of the branch and the heading per generation of a
+  row are only needed if they differ from the defaults. The defaults are set once above the table
+  (settings `hierarchy_sub_branch` and `hierarchy_generation`, saved in `settings.json` of the tree).
+- The book and the chart have lists of their own (tabs on the page). Typically the chart has fewer branches
+  and other stop individuals than the book.
+- **Save** (managers only) writes `branch_seeds.txt` in the folder of the tree. The export reads it unchanged.
+  Rows that were not changed keep their line exactly (spaces, number of columns); changed rows are written
+  with as few columns as needed. The separators of the list are kept. Lines that the page does not
+  understand (comments starting with `#`, lines without a separator, lines with an error for the export)
+  are shown greyed out and kept as they are, empty lines as well. Without a folder of the tree, the page
+  starts with the current list (e.g. from `export_latex_settings.local.json`) and saving creates the folder.
+- Saving checks the changed values: the start individual must exist and may start only one branch, stop
+  individuals must exist, the direction must be valid, names and headings must not contain the column
+  separator or a line break. If something is wrong, nothing is saved and the rows are marked. An unknown
+  individual in a row that was not changed is only a warning (the export skips such a branch).
+
+### Format of the list
+
+The first two characters are the separators (e.g. `;,`). Then one branch per line with 3 to 7 columns:
+
+```
+;,
+I1;Family Miller;both;I7,I8;\chapter{;\section{Generation;include
+I2;Family Smith;descendants
+I3;Ancestors of Anna;ancestors;;;;exclude
+```
+
+start individual; name; direction (`both`, `ancestors`, `descendants`); stop individuals (separated by the
+second separator); heading of the branch (LaTeX command, the module adds ` <name>}`); heading per generation;
+`include` or `exclude`. Missing columns get the defaults (no stop individuals, default headings, include).
+
+How the export forms the branches (good to know when choosing stop individuals):
+
+- The branches are formed one after the other in the order of the list. A branch starts with the start
+  individual, goes one step in the chosen direction (parents; spouses and children; or all of them) and from
+  there continues in all directions (parents, spouses, children) as far as the family is connected.
+- A stop individual belongs to the branch, but the branch does not continue beyond it. The module adds no
+  stop individuals by itself: the start individual of another branch is not a stop unless you enter it.
+- If a later branch reaches individuals of an earlier branch, they move to the later branch ("the last branch
+  wins"). Start and stop individuals that are connected to their earlier branch appear there a second time,
+  with a reference to the other branch.
+- Individuals that belong to no branch are not exported (if the list has branches).
+- Switching a branch off (`exclude`) does not change how the branches are formed: the individuals of that
+  branch are only left out of the output.
+
+### Sets
+
+A set remembers which branches are exported, for example "Book for Anna" with only her branches. Switch
+between sets with **Apply set**:
+
+- **Save as set** saves the table and stores the current selection of **both** lists (book and chart) under
+  the given name. An existing name (upper and lower case do not matter) updates that set.
+- **Apply set** switches the branches of the book and the chart as stored in the set and saves the lists.
+  Remove the tick "Apply to the book and the chart" to apply it only to the list shown.
+- **Rename** and **Delete** a set. The page shows which set is active and whether the lists differ from it.
+- A branch is identified by its start individual. Branches added after the set was saved are switched **on**
+  when the set is applied and marked "not in the set" (save the set again to include them). Entries of the
+  set for branches that no longer exist are ignored and reported.
+
+Each set is a readable JSON file in the folder of the tree; the file name is derived from the name of the set
+(only letters, digits, `_` and `-`, with a short hash if the name contains other characters):
+
+```
+data/ExportFamilyBook/<tree>/branch_sets/Book_for_Anna-1a2b3c4d.json
+data/ExportFamilyBook/<tree>/branch_set_active.txt     file name (without .json) of the active set
+```
+
+```json
+{
+    "format": "ExportFamilyBook-branch-set",
+    "version": 1,
+    "name": "Book for Anna",
+    "saved": "2026-01-31 12:00:00",
+    "latex": [
+        { "start": "I1", "branch": "Family Miller", "export": true },
+        { "start": "I3", "branch": "Ancestors of Anna", "export": false }
+    ],
+    "graphml": [
+        { "start": "I1", "branch": "Family Miller", "export": true }
+    ]
+}
+```
+
+`branch` is only for reading. One file per set, so a set can be copied, backed up or deleted on its own.
 
 ## Settings files
 
@@ -93,6 +191,8 @@ data/ExportFamilyBook/<tree>/graphml/
     families_description_template.txt
     branch_seeds.txt
     README.txt
+data/ExportFamilyBook/<tree>/branch_sets/      sets of the page "Branches and sets", one JSON file per set
+data/ExportFamilyBook/<tree>/branch_set_active.txt
 ```
 
 - Edit these files with any text editor (UTF-8, LF or CRLF line endings, a byte order mark is ignored).
