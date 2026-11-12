@@ -1193,8 +1193,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         return '<tr><td class="topbottombar" colspan="' . $colspan . '">' .
             '<button type="submit" name="mod_action" value="save_tree_settings_' . $export_type . '">' .
-            e(I18N::translate('Save as default for this tree')) . '</button> ' .
-            e(I18N::translate('Files in %s', Registry::filesystem()->dataName() . $this->treeSettingsFolder($tree, $export_type))) .
+            e(I18N::translate('Save as default for this tree')) . '</button>' .
             '</td></tr>';
     }
 
