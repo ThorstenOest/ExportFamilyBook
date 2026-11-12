@@ -7,6 +7,7 @@
 
 //namespace haduloha\ExportFamilyBook;
 require_once __DIR__ . '/moduleExport.php';
+require_once __DIR__ . '/moduleBranches.php';
 
 
 use Fisharebest\Webtrees\Webtrees;
@@ -39,6 +40,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
     use ModuleCustomTrait;
     use ModuleMenuTrait;
+    use ExportFamilyBookBranches;
 
     // Access level if Control panel > Modules > Menus has no entry for this module and tree: managers only.
     // webtrees 2.2 has no defaultAccessLevel(); AbstractModule::accessLevel() falls back to this property.
@@ -49,6 +51,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
     private const PAGE_ACTIONS = array(
         'latex' => 'Latex',
         'media' => 'Media',
+        'branches' => 'Branches',
         'graphml' => 'Graphml',
     );
 
@@ -136,14 +139,16 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
      * The URL of the page of an export type
      *
      * @param Tree   $tree
-     * @param string $export_type 'latex', 'media' (image selection) or 'graphml'
+     * @param string $export_type 'latex', 'media' (image selection), 'branches' or 'graphml'
      * @param string $xref        reference individual to preselect in the form (optional)
+     * @param array<string,string> $parameters further parameters of the URL
      *
      * @return string
      */
-    public function pageUrl(Tree $tree, string $export_type, string $xref = ''): string
+    public function pageUrl(Tree $tree, string $export_type, string $xref = '', array $parameters = []): string
     {
         $parameters = [
+            ...$parameters,
             'module' => $this->name(),
             'action' => self::PAGE_ACTIONS[$export_type],
             'tree'   => $tree->name(),
@@ -158,7 +163,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
     /**
      * Title of the page of an export type (also the label of its menu entry)
      *
-     * @param string $export_type 'latex', 'media' or 'graphml'
+     * @param string $export_type 'latex', 'media', 'branches' or 'graphml'
      * @return string
      */
     public function pageTitle(string $export_type): string
@@ -166,6 +171,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         return match ($export_type) {
             'latex' => I18N::translate('Book (LaTeX)'),
             'media' => I18N::translate('Image selection'),
+            'branches' => I18N::translate('Branches and sets'),
             default => I18N::translate('Family tree chart (GraphML)'),
         };
     }
@@ -239,6 +245,104 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 'The images have been marked as reviewed.' => 'Die Bilder wurden als durchgesehen markiert.',
                 'There are unsaved changes.' => 'Es gibt ungespeicherte Änderungen.',
                 'Unsaved changes: %s' => 'Ungespeicherte Änderungen: %s',
+                'Branches and sets' => 'Zweige',
+                'Only managers of the family tree can change the branches.' => 'Nur Verwalter des Stammbaums können die Zweige ändern.',
+                'The branches could not be saved: %s' => 'Die Zweige konnten nicht gespeichert werden: %s',
+                'The start individual %s does not exist. The export skips this branch.' => 'Die Startperson %s gibt es nicht. Der Export überspringt diesen Zweig.',
+                'The stop individual %s does not exist.' => 'Die Stopp-Person %s gibt es nicht.',
+                'This individual is the start of several branches.' => 'Diese Person ist Startperson mehrerer Zweige.',
+                'The list of branches has been changed in the meantime. Please load the page again and repeat your changes.' => 'Die Liste der Zweige wurde inzwischen geändert. Bitte lade die Seite neu und wiederhole deine Änderungen.',
+                'The list of branches cannot be changed on this page because it does not start with two separators.' => 'Die Liste der Zweige kann auf dieser Seite nicht geändert werden, weil sie nicht mit zwei Trennzeichen beginnt.',
+                'The form data is invalid.' => 'Die Formulardaten sind ungültig.',
+                'A heading must not contain a line break.' => 'Eine Überschrift darf keinen Zeilenumbruch enthalten.',
+                'Nothing has been saved. Please correct the marked rows: %s' => 'Es wurde nichts gespeichert. Bitte korrigiere die markierten Zeilen: %s',
+                'The set “%s” has been updated.' => 'Der Satz „%s“ wurde aktualisiert.',
+                'The set “%s” has been saved.' => 'Der Satz „%s“ wurde gespeichert.',
+                'The branches have been saved.' => 'Die Zweige wurden gespeichert.',
+                'The branches have not changed.' => 'Die Zweige sind unverändert.',
+                'The individual %s is the start of several branches.' => 'Die Person %s ist Startperson mehrerer Zweige.',
+                'Please select the start individual.' => 'Bitte wähle die Startperson aus.',
+                'The start individual %s does not exist.' => 'Die Startperson %s gibt es nicht.',
+                'Please enter the name of the branch.' => 'Bitte gib den Namen des Zweigs ein.',
+                'The name “%1$s” must not contain the character %2$s (separator of the list) or a line break.' => 'Der Name „%1$s“ darf weder das Zeichen %2$s (Trennzeichen der Liste) noch einen Zeilenumbruch enthalten.',
+                'The direction “%s” is invalid.' => 'Die Richtung „%s“ ist ungültig.',
+                'The heading “%1$s” must not contain the character %2$s (separator of the list) or a line break.' => 'Die Überschrift „%1$s“ darf weder das Zeichen %2$s (Trennzeichen der Liste) noch einen Zeilenumbruch enthalten.',
+                'Please enter a name for the set.' => 'Bitte gib einen Namen für den Satz ein.',
+                'The name of a set may have up to %s characters and no control characters.' => 'Der Name eines Satzes darf bis zu %s Zeichen und keine Steuerzeichen haben.',
+                'A set with the name “%s” already exists.' => 'Es gibt schon einen Satz mit dem Namen „%s“.',
+                'The set does not exist or cannot be read.' => 'Den Satz gibt es nicht, oder er kann nicht gelesen werden.',
+                '%s: the list of branches cannot be changed on this page because it does not start with two separators.' => '%s: Die Liste der Zweige kann auf dieser Seite nicht geändert werden, weil sie nicht mit zwei Trennzeichen beginnt.',
+                '%1$s: these branches are not in the set and have been switched on: %2$s' => '%1$s: Diese Zweige sind nicht im Satz und wurden eingeschaltet: %2$s',
+                'The set “%s” has been applied to the book and the chart.' => 'Der Satz „%s“ wurde auf Buch und Grafik angewendet.',
+                'The set “%1$s” has been applied to %2$s.' => 'Der Satz „%1$s“ wurde auf %2$s angewendet.',
+                'The set “%1$s” has been renamed to “%2$s”.' => 'Der Satz „%1$s“ wurde in „%2$s“ umbenannt.',
+                'The set “%s” has been deleted.' => 'Der Satz „%s“ wurde gelöscht.',
+                'Both directions' => 'Beide Richtungen',
+                'Towards the parents' => 'Richtung Eltern',
+                'Towards spouses and children' => 'Richtung Ehepartner und Kinder',
+                'Ignored by the export (no separator)' => 'Vom Export ignoriert (kein Trennzeichen)',
+                'Wrong number of columns – the export stops with an error' => 'Falsche Spaltenzahl – der Export bricht mit einem Fehler ab',
+                'Invalid direction – the export stops with an error' => 'Ungültige Richtung – der Export bricht mit einem Fehler ab',
+                'Column 7 is neither include nor exclude – the export stops with an error' => 'Spalte 7 ist weder include noch exclude – der Export bricht mit einem Fehler ab',
+                'Invalid ID of an individual' => 'Ungültige ID einer Person',
+                'Exported' => 'Exportieren',
+                'Drag to change the order' => 'Ziehen, um die Reihenfolge zu ändern',
+                'Change' => 'Ändern',
+                'Cancel' => 'Abbrechen',
+                'Search for an individual' => 'Person suchen',
+                'Unknown individual %s' => 'Unbekannte Person %s',
+                'empty line' => 'Leerzeile',
+                'This line is kept as it is. Edit it in the text field of the export page.' => 'Diese Zeile bleibt unverändert. Bearbeiten kannst du sie im Textfeld der Export-Seite.',
+                'new' => 'neu',
+                'not in the set' => 'nicht im Satz',
+                'This branch is not in the active set. It was switched on when the set was applied.' => 'Dieser Zweig ist nicht im aktiven Satz. Beim Anwenden des Satzes wurde er eingeschaltet.',
+                'Heading of the branch' => 'Überschrift des Zweigs',
+                'Heading per generation' => 'Überschrift je Generation',
+                'Name of the branch' => 'Name des Zweigs',
+                'Direction' => 'Richtung',
+                'Delete this line? It is not a branch that this page can show.' => 'Diese Zeile löschen? Sie ist kein Zweig, den diese Seite anzeigen kann.',
+                'There are unsaved changes. They are lost when you apply a set. Continue?' => 'Es gibt ungespeicherte Änderungen. Sie gehen beim Anwenden eines Satzes verloren. Weiter?',
+                'The set “%s” already exists. Overwrite it with the current selection?' => 'Den Satz „%s“ gibt es schon. Mit der aktuellen Auswahl überschreiben?',
+                'New name of the set “%s”:' => 'Neuer Name des Satzes „%s“:',
+                'Delete the set “%s”?' => 'Den Satz „%s“ löschen?',
+                'Please select a set.' => 'Bitte wähle einen Satz aus.',
+                'Each row is a branch. The order of the rows is the order of the branches in the book. Remove the tick “Exported” to leave the individuals of a branch out.' => 'Jede Zeile ist ein Zweig. Die Reihenfolge der Zeilen ist die Reihenfolge der Zweige im Buch. Nimm den Haken „Exportieren“ weg, um die Personen eines Zweigs wegzulassen.',
+                'A set remembers which branches are exported, e.g. for a book for one relative. You can switch between sets.' => 'Ein Satz merkt sich, welche Zweige exportiert werden, z. B. für ein Buch für einen Verwandten. Du kannst zwischen Sätzen umschalten.',
+                'The book and the chart have lists of their own. A set remembers the selection of both lists and is applied to both unless you choose otherwise.' => 'Buch und Grafik haben je eine eigene Liste. Ein Satz merkt sich die Auswahl beider Listen und wird auf beide angewendet, wenn du nichts anderes wählst.',
+                'Sets' => 'Sätze',
+                'No set is active.' => 'Kein Satz ist aktiv.',
+                'Active set:' => 'Aktiver Satz:',
+                'The branches match the set.' => 'Die Zweige entsprechen dem Satz.',
+                'Compared with the saved lists of the book and the chart. Save the set again to include changes.' => 'Verglichen mit den gespeicherten Listen von Buch und Grafik. Speichere den Satz erneut, um Änderungen zu übernehmen.',
+                'There are no sets yet. Use “Save as set” below the table.' => 'Es gibt noch keine Sätze. Nutze „Als Satz speichern“ unter der Tabelle.',
+                'Set' => 'Satz',
+                '%s (cannot be read)' => '%s (nicht lesbar)',
+                'Apply to the book and the chart' => 'Auf Buch und Grafik anwenden',
+                'Apply set' => 'Satz anwenden',
+                'Rename' => 'Umbenennen',
+                'Default headings' => 'Standard-Überschriften',
+                'LaTeX command that starts the heading, e.g. \\chapter{ – the module adds the name of the branch and the closing brace. A branch uses these values unless it has headings of its own.' => 'LaTeX-Befehl, mit dem die Überschrift beginnt, z. B. \\chapter{ – das Modul ergänzt den Namen des Zweigs und die schließende Klammer. Ein Zweig verwendet diese Werte, wenn er keine eigenen Überschriften hat.',
+                'All on' => 'Alle an',
+                'All off' => 'Alle aus',
+                'Add branch' => 'Zweig hinzufügen',
+                'Show headings' => 'Überschriften zeigen',
+                'Save' => 'Speichern',
+                'Start individual' => 'Startperson',
+                'Stop individuals' => 'Stopp-Personen',
+                'Headings' => 'Überschriften',
+                'Actions' => 'Aktionen',
+                'There are no branches. Without branches the export contains all individuals connected with the reference individual.' => 'Es gibt keine Zweige. Ohne Zweige enthält der Export alle Personen, die mit der Bezugsperson verbunden sind.',
+                'Direction: the branch starts with the start individual and first goes to the parents, to spouses and children, or both. From there it continues in all directions until it reaches a stop individual. A stop individual still belongs to the branch, but the branch does not continue beyond it.' => 'Richtung: Der Zweig beginnt bei der Startperson und geht zuerst zu den Eltern, zu Ehepartnern und Kindern oder in beide Richtungen. Von dort geht er in alle Richtungen weiter, bis er eine Stopp-Person erreicht. Eine Stopp-Person gehört noch zum Zweig, der Zweig geht aber nicht über sie hinaus.',
+                'If a later branch reaches individuals of an earlier branch, they move to the later branch. Switching a branch off does not change which branch an individual belongs to.' => 'Erreicht ein späterer Zweig Personen eines früheren Zweigs, wechseln sie in den späteren Zweig. Das Ausschalten eines Zweigs ändert nicht, zu welchem Zweig eine Person gehört.',
+                'Name of the set' => 'Name des Satzes',
+                'Name of the set, e.g. Book for …' => 'Name des Satzes, z. B. Buch für …',
+                'Save as set' => 'Als Satz speichern',
+                '“Save as set” saves the table and remembers which branches of the book and of the chart are exported.' => '„Als Satz speichern“ speichert die Tabelle und merkt sich, welche Zweige von Buch und Grafik exportiert werden.',
+                '%1$s of %2$s branches are exported.' => '%1$s von %2$s Zweigen werden exportiert.',
+                '%1$s: %2$s branch of the set no longer exists.' . I18N::PLURAL . '%1$s: %2$s branches of the set no longer exist.' => '%1$s: %2$s Zweig des Satzes gibt es nicht mehr.' . I18N::PLURAL . '%1$s: %2$s Zweige des Satzes gibt es nicht mehr.',
+                '%s branch differs from the set.' . I18N::PLURAL . '%s branches differ from the set.' => '%s Zweig weicht vom Satz ab.' . I18N::PLURAL . '%s Zweige weichen vom Satz ab.',
+                '%s branch is not in the set.' . I18N::PLURAL . '%s branches are not in the set.' => '%s Zweig ist nicht im Satz.' . I18N::PLURAL . '%s Zweige sind nicht im Satz.',
+                'The sets could not be read: %s' => 'Die Sätze konnten nicht gelesen werden: %s',
             ];
         }
 
@@ -1603,6 +1707,8 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         if ($export_type === 'latex') {
             $lines[] = 'The page "Image selection" of the module changes exclude_media.txt and keeps its comments.';
         }
+        $lines[] = 'The page "Branches and sets" of the module changes branch_seeds.txt and keeps lines it does not understand.';
+        $lines[] = 'Its sets are stored in ../branch_sets (see README.txt there).';
 
         return implode("\n", $lines) . "\n";
     }
@@ -1702,7 +1808,8 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         echo '<tr><td class="descriptionbox width30 wrap" colspan="7">', I18N::translate(
             'Seeds for branches'
-        ), '</td></tr>';
+        ), ' – <a href="', e($this->pageUrl($tree, 'branches', $individual?->xref() ?? '', ['list' => 'graphml'])), '">',
+            e($this->pageTitle('branches')), '</a></td></tr>';
 
         echo '<tr><td class="descriptionbox width30 wrap">', I18N::translate(
             "Seeds"
@@ -2220,7 +2327,8 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 		 */
         echo '<tr><td class="descriptionbox width30 wrap" colspan="7">', I18N::translate(
             'Seeds for branches'
-        ), '</td></tr>';
+        ), ' – <a href="', e($this->pageUrl($tree, 'branches', $individual?->xref() ?? '')), '">',
+            e($this->pageTitle('branches')), '</a></td></tr>';
 
         echo '<tr><td class="descriptionbox width30 wrap">', I18N::translate(
             "Seeds"
