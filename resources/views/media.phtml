@@ -1,0 +1,303 @@
+<?php
+
+/**
+ * Page "Image selection": the images of the book (LaTeX) with ticks to leave images out
+ *
+ * @var string $title
+ * @var \Fisharebest\Webtrees\Tree $tree
+ * @var \Fisharebest\Webtrees\Individual|null $individual
+ * @var array<string,array> $items media xref => data of the image (see ExportFamilyBook::mediaPageData)
+ * @var array<int,array> $groups individuals with their images, in the order of the book
+ * @var int $count
+ * @var int $excluded
+ * @var int $thumbnail_size
+ * @var int $review time of the last review (0: never)
+ * @var bool $can_save
+ * @var string $form_url
+ * @var string $latex_url
+ * @var string $latex_title
+ */
+
+use Fisharebest\Webtrees\I18N;
+use Fisharebest\Webtrees\Registry;
+
+$counter = static function (string $text, array $spans): string {
+    $html = e($text);
+    foreach ($spans as $placeholder => $span) {
+        $html = str_replace(e($placeholder), $span, $html);
+    }
+    return $html;
+};
+?>
+
+<style>
+    #efb-media .efb-toolbar { position: sticky; top: 0; z-index: 10; background: var(--bs-body-bg, #fff); border-bottom: 1px solid var(--bs-border-color, #ccc); padding: .5rem 0; }
+    #efb-media .efb-toolbar .row > div { margin-bottom: .25rem; }
+    #efb-media .efb-group { margin-top: 1rem; }
+    #efb-media .efb-group h3 { font-size: 1.1rem; margin-bottom: .25rem; }
+    #efb-media .efb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(<?= (int) $thumbnail_size + 20 ?>px, 1fr)); gap: .5rem; }
+    #efb-media .efb-card { border: 1px solid var(--bs-border-color, #ccc); border-radius: .25rem; padding: .25rem; font-size: .85rem; overflow-wrap: anywhere; }
+    #efb-media .efb-thumb { display: flex; align-items: center; justify-content: center; height: <?= (int) $thumbnail_size ?>px; }
+    #efb-media .efb-thumb img { max-width: 100%; max-height: <?= (int) $thumbnail_size ?>px; }
+    #efb-media .efb-thumb svg { width: 4rem; height: 4rem; }
+    #efb-media .efb-excluded { background: var(--bs-secondary-bg, #eee); color: var(--bs-secondary-color, #777); }
+    #efb-media .efb-excluded .efb-thumb { opacity: .35; filter: grayscale(1); }
+    #efb-media .efb-file, #efb-media .efb-changed { color: var(--bs-secondary-color, #777); }
+    #efb-media .efb-hidden { display: none; }
+</style>
+
+<h1><?= e($title) ?></h1>
+
+<div id="efb-media">
+    <p>
+        <a href="<?= e($latex_url) ?>"><?= e(I18N::translate('Go to %s', $latex_title)) ?></a>
+    </p>
+    <p>
+        <?= e(I18N::translate('These are the images that the book would contain with the default settings of this family tree. Remove the tick to leave an image out of the book.')) ?>
+        <?= e(I18N::translate('An image linked to several individuals is shown with each of them. The tick applies to the image.')) ?>
+        <?php if ($individual !== null) : ?>
+            <br>
+            <?= $counter(I18N::translate('Reference individual: %s', '{name}'), ['{name}' => '<a href="' . e($individual->url()) . '">' . e(html_entity_decode(strip_tags($individual->fullName()), ENT_QUOTES | ENT_HTML5, 'UTF-8')) . '</a>']) ?>
+        <?php endif ?>
+    </p>
+
+    <div class="efb-toolbar">
+        <form method="post" action="<?= e($form_url) ?>" id="efb-form" class="mb-2">
+            <?= csrf_field() ?>
+            <input type="hidden" name="exclude" id="efb-exclude" value="">
+            <?php if ($can_save) : ?>
+                <button type="submit" class="btn btn-primary" name="mod_action" value="save_media"><?= e(I18N::translate('Save selection')) ?></button>
+                <button type="submit" class="btn btn-secondary" name="mod_action" value="review_media"><?= e(I18N::translate('Mark as reviewed')) ?></button>
+            <?php else : ?>
+                <span class="text-muted"><?= e(I18N::translate('Only managers of the family tree can change the image selection.')) ?></span>
+            <?php endif ?>
+            <span class="ms-3">
+                <?= $counter(I18N::translate('%1$s images, %2$s of them left out', '{count}', '{excluded}'), [
+                    '{count}' => '<span id="efb-count">' . e(I18N::number($count)) . '</span>',
+                    '{excluded}' => '<span id="efb-excluded">' . e(I18N::number($excluded)) . '</span>',
+                ]) ?>
+                –
+                <?= $counter(I18N::translate('Showing %1$s of %2$s images', '{shown}', '{total}'), [
+                    '{shown}' => '<span id="efb-shown">' . e(I18N::number($count)) . '</span>',
+                    '{total}' => e(I18N::number($count)),
+                ]) ?>
+            </span>
+            <span class="ms-3 text-danger" id="efb-dirty" hidden>
+                <?= $counter(I18N::translate('Unsaved changes: %s', '{n}'), ['{n}' => '<span id="efb-dirty-count">0</span>']) ?>
+            </span>
+            <span class="ms-3 text-muted">
+                <?= e($review > 0 ? I18N::translate('Last review: %s', Registry::timestampFactory()->make($review)->isoFormat('LLL')) : I18N::translate('Not reviewed yet')) ?>
+            </span>
+        </form>
+
+        <div class="row g-2 align-items-end">
+            <div class="col-auto">
+                <label class="form-label mb-0" for="efb-order"><?= e(I18N::translate('Order')) ?></label>
+                <select id="efb-order" class="form-select form-select-sm">
+                    <option value="book"><?= e(I18N::translate('Order of the book')) ?></option>
+                    <option value="alpha"><?= e(I18N::translate('Alphabetical')) ?></option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label mb-0" for="efb-status"><?= e(I18N::translate('Show')) ?></label>
+                <select id="efb-status" class="form-select form-select-sm">
+                    <option value="all"><?= e(I18N::translate('All images')) ?></option>
+                    <option value="in"><?= e(I18N::translate('Only included images')) ?></option>
+                    <option value="out"><?= e(I18N::translate('Only excluded images')) ?></option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label mb-0" for="efb-search"><?= e(I18N::translate('Search')) ?></label>
+                <input type="search" id="efb-search" class="form-control form-control-sm" placeholder="<?= e(I18N::translate('Name, title or file')) ?>">
+            </div>
+            <div class="col-auto">
+                <label class="form-label mb-0" for="efb-since"><?= e(I18N::translate('Changed since')) ?></label>
+                <input type="date" id="efb-since" class="form-control form-control-sm">
+            </div>
+            <div class="col-auto">
+                <div class="form-check">
+                    <input type="checkbox" id="efb-new" class="form-check-input">
+                    <label class="form-check-label" for="efb-new"><?= e(I18N::translate('New since the last review')) ?></label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <?php if ($groups === []) : ?>
+        <p class="mt-3"><?= e(I18N::translate('No images found.')) ?></p>
+    <?php endif ?>
+
+    <div id="efb-groups">
+        <?php foreach ($groups as $book_index => $group) : ?>
+            <div class="efb-group" data-book="<?= (int) $book_index ?>" data-sort="<?= e($group['sort']) ?>" data-search="<?= e($group['search']) ?>">
+                <h3><a href="<?= e($group['url']) ?>"><?= e($group['name']) ?></a></h3>
+                <div class="efb-grid">
+                    <?php foreach ($group['media'] as $xref) : ?>
+                        <?php $item = $items[$xref]; $file = $item['file']; ?>
+                        <div class="efb-card<?= $item['state'] === 'exclude' ? ' efb-excluded' : '' ?>" data-xref="<?= e($item['xref']) ?>" data-state="<?= e($item['state']) ?>" data-changed="<?= e($item['changed']) ?>" data-new="<?= $item['new'] ? '1' : '0' ?>" data-search="<?= e($item['search']) ?>">
+                            <a class="efb-thumb" href="<?= e($item['url']) ?>" target="_blank" rel="noopener">
+                                <?php if ($file->isImage() && !$file->isExternal()) : ?>
+                                    <img loading="lazy" alt="" src="<?= e($file->imageUrl($thumbnail_size, $thumbnail_size, 'contain')) ?>" srcset="<?= e($file->imageUrl(2 * $thumbnail_size, 2 * $thumbnail_size, 'contain')) ?> 2x">
+                                <?php else : ?>
+                                    <?= view('icons/mime', ['type' => $file->mimeType()]) ?>
+                                <?php endif ?>
+                            </a>
+                            <div class="form-check">
+                                <?php if ($item['state'] === 'include') : ?>
+                                    <input type="checkbox" class="form-check-input" checked disabled id="efb-c<?= (int) $book_index ?>-<?= e($item['xref']) ?>">
+                                    <label class="form-check-label" for="efb-c<?= (int) $book_index ?>-<?= e($item['xref']) ?>" title="<?= e(I18N::translate('Always in the book (list “Include” of the settings)')) ?>"><?= e(I18N::translate('Always in the book (list “Include” of the settings)')) ?></label>
+                                <?php else : ?>
+                                    <input type="checkbox" class="form-check-input efb-check" data-xref="<?= e($item['xref']) ?>" id="efb-c<?= (int) $book_index ?>-<?= e($item['xref']) ?>" <?= $item['state'] === 'exclude' ? '' : 'checked' ?> <?= $can_save ? '' : 'disabled' ?>>
+                                    <label class="form-check-label" for="efb-c<?= (int) $book_index ?>-<?= e($item['xref']) ?>"><?= e(I18N::translate('In the book')) ?></label>
+                                <?php endif ?>
+                            </div>
+                            <div class="efb-title"><?= e($item['title']) ?></div>
+                            <?php foreach ($item['files'] as $filename) : ?>
+                                <div class="efb-file"><?= e(basename(str_replace('\\', '/', $filename))) ?></div>
+                            <?php endforeach ?>
+                            <?php if ($item['changed_text'] !== '') : ?>
+                                <div class="efb-changed"><?= e(I18N::translate('Changed: %s', $item['changed_text'])) ?></div>
+                            <?php endif ?>
+                        </div>
+                    <?php endforeach ?>
+                </div>
+            </div>
+        <?php endforeach ?>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+    const root = document.getElementById('efb-media');
+    const container = document.getElementById('efb-groups');
+    const groups = Array.from(container.querySelectorAll('.efb-group'));
+    const cards = Array.from(container.querySelectorAll('.efb-card'));
+    const byXref = new Map();
+    const excluded = new Set();
+    cards.forEach(function (card) {
+        const xref = card.dataset.xref;
+        if (!byXref.has(xref)) {
+            byXref.set(xref, []);
+        }
+        byXref.get(xref).push(card);
+        if (card.dataset.state === 'exclude') {
+            excluded.add(xref);
+        }
+    });
+    const initial = new Set(excluded);
+    const number = new Intl.NumberFormat(document.documentElement.lang || undefined);
+
+    function dirtyCount() {
+        let n = 0;
+        byXref.forEach(function (list, xref) {
+            if (excluded.has(xref) !== initial.has(xref)) {
+                n++;
+            }
+        });
+        return n;
+    }
+
+    function updateCounters() {
+        document.getElementById('efb-excluded').textContent = number.format(excluded.size);
+        const n = dirtyCount();
+        document.getElementById('efb-dirty-count').textContent = number.format(n);
+        document.getElementById('efb-dirty').hidden = (n === 0);
+    }
+
+    function setExcluded(xref, exclude) {
+        if (exclude) {
+            excluded.add(xref);
+        } else {
+            excluded.delete(xref);
+        }
+        byXref.get(xref).forEach(function (card) {
+            card.classList.toggle('efb-excluded', exclude);
+            const box = card.querySelector('.efb-check');
+            if (box) {
+                box.checked = !exclude;
+            }
+        });
+        updateCounters();
+        applyFilter();
+    }
+
+    function applyFilter() {
+        const status = document.getElementById('efb-status').value;
+        const query = document.getElementById('efb-search').value.trim().toLowerCase();
+        const since = document.getElementById('efb-since').value;
+        const onlyNew = document.getElementById('efb-new').checked;
+        const shown = new Set();
+        groups.forEach(function (group) {
+            const groupMatch = query === '' || group.dataset.search.indexOf(query) !== -1;
+            let visible = 0;
+            group.querySelectorAll('.efb-card').forEach(function (card) {
+                const xref = card.dataset.xref;
+                const out = excluded.has(xref);
+                let show = (status === 'all') || (status === 'in' && !out) || (status === 'out' && out);
+                show = show && (groupMatch || card.dataset.search.indexOf(query) !== -1);
+                show = show && (since === '' || (card.dataset.changed !== '' && card.dataset.changed >= since));
+                show = show && (!onlyNew || card.dataset.new === '1');
+                card.classList.toggle('efb-hidden', !show);
+                if (show) {
+                    visible++;
+                    shown.add(xref);
+                }
+            });
+            group.classList.toggle('efb-hidden', visible === 0);
+        });
+        document.getElementById('efb-shown').textContent = number.format(shown.size);
+    }
+
+    function applyOrder() {
+        const order = document.getElementById('efb-order').value;
+        const sorted = groups.slice().sort(function (a, b) {
+            if (order === 'alpha') {
+                const c = a.dataset.sort.localeCompare(b.dataset.sort, undefined, {sensitivity: 'base'});
+                if (c !== 0) {
+                    return c;
+                }
+            }
+            return Number(a.dataset.book) - Number(b.dataset.book);
+        });
+        sorted.forEach(function (group) {
+            container.appendChild(group);
+        });
+    }
+
+    container.addEventListener('change', function (event) {
+        const box = event.target;
+        if (box.classList && box.classList.contains('efb-check')) {
+            setExcluded(box.dataset.xref, !box.checked);
+        }
+    });
+
+    let timer = null;
+    document.getElementById('efb-search').addEventListener('input', function () {
+        clearTimeout(timer);
+        timer = setTimeout(applyFilter, 200);
+    });
+    ['efb-status', 'efb-since', 'efb-new'].forEach(function (id) {
+        document.getElementById(id).addEventListener('change', applyFilter);
+    });
+    document.getElementById('efb-order').addEventListener('change', applyOrder);
+
+    let submitting = false;
+    document.getElementById('efb-form').addEventListener('submit', function (event) {
+        // "Mark as reviewed" does not save the ticks
+        if (event.submitter && event.submitter.value === 'review_media' && dirtyCount() > 0
+            && !window.confirm(<?= json_encode(I18N::translate('There are unsaved changes.'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>)) {
+            event.preventDefault();
+            return;
+        }
+        document.getElementById('efb-exclude').value = Array.from(excluded).join(',');
+        submitting = true;
+    });
+    window.addEventListener('beforeunload', function (event) {
+        if (!submitting && dirtyCount() > 0) {
+            event.preventDefault();
+            event.returnValue = <?= json_encode(I18N::translate('There are unsaved changes.'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+        }
+    });
+})();
+</script>
