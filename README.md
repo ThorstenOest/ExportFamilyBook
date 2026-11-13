@@ -247,6 +247,10 @@ xelatex book.tex
 
 Notes:
 
+- The name of the `.tex` file must not contain spaces (use `family_book.tex`, not `family book.tex`).
+  The example preamble loads the list of sources with `\bibliography{\jobname}`; with a space in the
+  file name BibTeX does not find this file and stops with an error. After renaming, delete the
+  auxiliary files with the old name (`.aux`, `.bbl`, `.bib`, `.idx`, ...).
 - The message "Please (re)run BibTeX" of biblatex may remain after the last run when `citecounter`
   is used. The list of sources is complete nevertheless.
 - A large tree with many pictures needs several minutes per run.
