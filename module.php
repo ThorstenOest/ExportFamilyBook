@@ -8,6 +8,7 @@
 //namespace haduloha\ExportFamilyBook;
 require_once __DIR__ . '/moduleExport.php';
 require_once __DIR__ . '/moduleBranches.php';
+require_once __DIR__ . '/moduleProfiles.php';
 
 
 use Fisharebest\Webtrees\Webtrees;
@@ -41,6 +42,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
     use ModuleCustomTrait;
     use ModuleMenuTrait;
     use ExportFamilyBookBranches;
+    use ExportFamilyBookProfiles;
 
     // Access level if Control panel > Modules > Menus has no entry for this module and tree: managers only.
     // webtrees 2.2 has no defaultAccessLevel(); AbstractModule::accessLevel() falls back to this property.
@@ -171,7 +173,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         return match ($export_type) {
             'latex' => I18N::translate('Book (LaTeX)'),
             'media' => I18N::translate('Image selection'),
-            'branches' => I18N::translate('Branches and sets'),
+            'branches' => I18N::translate('Branch selection'),
             default => I18N::translate('Family tree chart (GraphML)'),
         };
     }
@@ -213,7 +215,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 'Family tree chart (GraphML)' => 'Stammbaum-Grafik (GraphML)',
                 'Go to %s' => 'Weiter zu %s',
                 'Image selection' => 'Bilderauswahl',
-                'These are the images that the book would contain with the default settings of this family tree. Remove the tick to leave an image out of the book.' => 'Das sind die Bilder, die das Buch mit den Standard-Einstellungen dieses Stammbaums enthalten würde. Nimm den Haken weg, um ein Bild aus dem Buch wegzulassen.',
                 'An image linked to several individuals is shown with each of them. The tick applies to the image.' => 'Ein Bild, das mit mehreren Personen verknüpft ist, erscheint bei jeder davon. Der Haken gilt für das Bild.',
                 'Reference individual: %s' => 'Bezugsperson: %s',
                 'Order' => 'Reihenfolge',
@@ -245,7 +246,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 'The images have been marked as reviewed.' => 'Die Bilder wurden als durchgesehen markiert.',
                 'There are unsaved changes.' => 'Es gibt ungespeicherte Änderungen.',
                 'Unsaved changes: %s' => 'Ungespeicherte Änderungen: %s',
-                'Branches and sets' => 'Zweige',
                 'Only managers of the family tree can change the branches.' => 'Nur Verwalter des Stammbaums können die Zweige ändern.',
                 'The branches could not be saved: %s' => 'Die Zweige konnten nicht gespeichert werden: %s',
                 'The start individual %s does not exist. The export skips this branch.' => 'Die Startperson %s gibt es nicht. Der Export überspringt diesen Zweig.',
@@ -256,8 +256,50 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 'The form data is invalid.' => 'Die Formulardaten sind ungültig.',
                 'A heading must not contain a line break.' => 'Eine Überschrift darf keinen Zeilenumbruch enthalten.',
                 'Nothing has been saved. Please correct the marked rows: %s' => 'Es wurde nichts gespeichert. Bitte korrigiere die markierten Zeilen: %s',
-                'The set “%s” has been updated.' => 'Der Satz „%s“ wurde aktualisiert.',
-                'The set “%s” has been saved.' => 'Der Satz „%s“ wurde gespeichert.',
+                'Branch selection' => 'Zweige',
+                'These are the images that the book of the active profile would contain. Remove the tick to leave an image out of the book.' => 'Das sind die Bilder, die das Buch des aktiven Profils enthalten würde. Nimm den Haken weg, um ein Bild aus dem Buch wegzulassen.',
+                'not in the profile' => 'nicht im Profil',
+                'This branch has been added after the profile was saved. It is exported as in the profile Standard until you save the profile.' => 'Dieser Zweig wurde nach dem Speichern des Profils hinzugefügt. Bis du das Profil speicherst, wird er wie im Profil „Standard“ exportiert.',
+                'The branches themselves (start and stop individuals, names, order) are common to all profiles. Which branches are exported belongs to the active profile.' => 'Die Zweige selbst (Start- und Stopp-Personen, Namen, Reihenfolge) gelten für alle Profile. Welche Zweige exportiert werden, gehört zum aktiven Profil.',
+                'The book and the chart have lists of their own.' => 'Buch und Grafik haben je eine eigene Liste.',
+                'This profile does not exist.' => 'Dieses Profil gibt es nicht.',
+                'Active profile: %s' => 'Aktives Profil: %s',
+                'Only managers of the family tree can change the profiles.' => 'Nur Verwalter des Stammbaums können die Profile ändern.',
+                'The profile “%s” has been created and is now active.' => 'Das Profil „%s“ wurde angelegt und ist jetzt aktiv.',
+                'The profiles could not be changed: %s' => 'Die Profile konnten nicht geändert werden: %s',
+                'Standard' => 'Standard',
+                'The active profile has been switched in the meantime. Nothing has been saved. Please load the page again.' => 'Das aktive Profil wurde inzwischen gewechselt. Es wurde nichts gespeichert. Bitte lade die Seite neu.',
+                'The profile “%s” cannot be renamed.' => 'Das Profil „%s“ kann nicht umbenannt werden.',
+                'The profile “%1$s” has been renamed to “%2$s”.' => 'Das Profil „%1$s“ wurde in „%2$s“ umbenannt.',
+                'The profile “%s” cannot be deleted.' => 'Das Profil „%s“ kann nicht gelöscht werden.',
+                'The profile “%s” has been deleted.' => 'Das Profil „%s“ wurde gelöscht.',
+                'Please enter a name for the profile.' => 'Bitte gib einen Namen für das Profil ein.',
+                'The name of a profile may have up to %s characters and no control characters.' => 'Der Name eines Profils darf bis zu %s Zeichen und keine Steuerzeichen haben.',
+                'A profile with the name “%s” already exists.' => 'Es gibt schon ein Profil mit dem Namen „%s“.',
+                'The old sets of branches could not be converted to profiles: %s' => 'Die alten Zweig-Sätze konnten nicht in Profile umgewandelt werden: %s',
+                'The profiles could not be read: %s' => 'Die Profile konnten nicht gelesen werden: %s',
+                'only this profile' => 'nur dieses Profil',
+                'Save profile “%s”' => 'Profil „%s“ speichern',
+                'Save as new profile:' => 'Als neues Profil speichern:',
+                'e.g. Book for …' => 'z. B. Buch für …',
+                'Save as new profile' => 'Als neues Profil speichern',
+                'The profile Standard contains the common settings of all profiles.' => 'Das Profil „Standard“ enthält die gemeinsamen Einstellungen aller Profile.',
+                'Fields with the tick “only this profile”, the reference individual and the selection of branches are saved in this profile. All other settings are common to all profiles.' => 'Felder mit dem Haken „nur dieses Profil“, die Bezugsperson und die Auswahl der Zweige werden in diesem Profil gespeichert. Alle anderen Einstellungen gelten gemeinsam für alle Profile.',
+                'The profile “%s” has been saved.' => 'Das Profil „%s“ wurde gespeichert.',
+                'The settings could not be saved: %s' => 'Die Einstellungen konnten nicht gespeichert werden: %s',
+                'Book profile' => 'Buchprofil',
+                'Switch' => 'Wechseln',
+                'Active profile:' => 'Aktives Profil:',
+                'This profile has its own reference individual, selection of branches and these settings: %s. All other settings are common to all profiles.' => 'Dieses Profil hat eine eigene Bezugsperson, eine eigene Auswahl der Zweige und diese eigenen Einstellungen: %s. Alle anderen Einstellungen gelten gemeinsam für alle Profile.',
+                'Manage profiles' => 'Profile verwalten',
+                'Name of the profile' => 'Name des Profils',
+                'New name, e.g. Book for …' => 'Neuer Name, z. B. Buch für …',
+                'Copy “%s” under this name' => '„%s“ unter diesem Namen kopieren',
+                'Rename “%s”' => '„%s“ umbenennen',
+                'Delete the profile “%s”? Its own settings are lost; the common settings stay.' => 'Das Profil „%s“ löschen? Seine eigenen Einstellungen gehen verloren; die gemeinsamen Einstellungen bleiben.',
+                'Delete “%s”' => '„%s“ löschen',
+                'A copy gets the saved state of the active profile. To keep unsaved changes of the export form, use “Save as new profile” there.' => 'Eine Kopie erhält den gespeicherten Stand des aktiven Profils. Um ungespeicherte Änderungen im Export-Formular zu behalten, nutze dort „Als neues Profil speichern“.',
+                'The profile Standard cannot be renamed or deleted.' => 'Das Profil „Standard“ kann nicht umbenannt oder gelöscht werden.',
                 'The branches have been saved.' => 'Die Zweige wurden gespeichert.',
                 'The branches have not changed.' => 'Die Zweige sind unverändert.',
                 'The individual %s is the start of several branches.' => 'Die Person %s ist Startperson mehrerer Zweige.',
@@ -267,16 +309,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 'The name “%1$s” must not contain the character %2$s (separator of the list) or a line break.' => 'Der Name „%1$s“ darf weder das Zeichen %2$s (Trennzeichen der Liste) noch einen Zeilenumbruch enthalten.',
                 'The direction “%s” is invalid.' => 'Die Richtung „%s“ ist ungültig.',
                 'The heading “%1$s” must not contain the character %2$s (separator of the list) or a line break.' => 'Die Überschrift „%1$s“ darf weder das Zeichen %2$s (Trennzeichen der Liste) noch einen Zeilenumbruch enthalten.',
-                'Please enter a name for the set.' => 'Bitte gib einen Namen für den Satz ein.',
-                'The name of a set may have up to %s characters and no control characters.' => 'Der Name eines Satzes darf bis zu %s Zeichen und keine Steuerzeichen haben.',
-                'A set with the name “%s” already exists.' => 'Es gibt schon einen Satz mit dem Namen „%s“.',
-                'The set does not exist or cannot be read.' => 'Den Satz gibt es nicht, oder er kann nicht gelesen werden.',
-                '%s: the list of branches cannot be changed on this page because it does not start with two separators.' => '%s: Die Liste der Zweige kann auf dieser Seite nicht geändert werden, weil sie nicht mit zwei Trennzeichen beginnt.',
-                '%1$s: these branches are not in the set and have been switched on: %2$s' => '%1$s: Diese Zweige sind nicht im Satz und wurden eingeschaltet: %2$s',
-                'The set “%s” has been applied to the book and the chart.' => 'Der Satz „%s“ wurde auf Buch und Grafik angewendet.',
-                'The set “%1$s” has been applied to %2$s.' => 'Der Satz „%1$s“ wurde auf %2$s angewendet.',
-                'The set “%1$s” has been renamed to “%2$s”.' => 'Der Satz „%1$s“ wurde in „%2$s“ umbenannt.',
-                'The set “%s” has been deleted.' => 'Der Satz „%s“ wurde gelöscht.',
                 'Both directions' => 'Beide Richtungen',
                 'Towards the parents' => 'Richtung Eltern',
                 'Towards spouses and children' => 'Richtung Ehepartner und Kinder',
@@ -294,31 +326,13 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 'empty line' => 'Leerzeile',
                 'This line is kept as it is. Edit it in the text field of the export page.' => 'Diese Zeile bleibt unverändert. Bearbeiten kannst du sie im Textfeld der Export-Seite.',
                 'new' => 'neu',
-                'not in the set' => 'nicht im Satz',
-                'This branch is not in the active set. It was switched on when the set was applied.' => 'Dieser Zweig ist nicht im aktiven Satz. Beim Anwenden des Satzes wurde er eingeschaltet.',
                 'Heading of the branch' => 'Überschrift des Zweigs',
                 'Heading per generation' => 'Überschrift je Generation',
                 'Name of the branch' => 'Name des Zweigs',
                 'Direction' => 'Richtung',
                 'Delete this line? It is not a branch that this page can show.' => 'Diese Zeile löschen? Sie ist kein Zweig, den diese Seite anzeigen kann.',
-                'There are unsaved changes. They are lost when you apply a set. Continue?' => 'Es gibt ungespeicherte Änderungen. Sie gehen beim Anwenden eines Satzes verloren. Weiter?',
-                'The set “%s” already exists. Overwrite it with the current selection?' => 'Den Satz „%s“ gibt es schon. Mit der aktuellen Auswahl überschreiben?',
-                'New name of the set “%s”:' => 'Neuer Name des Satzes „%s“:',
-                'Delete the set “%s”?' => 'Den Satz „%s“ löschen?',
-                'Please select a set.' => 'Bitte wähle einen Satz aus.',
                 'Each row is a branch. The order of the rows is the order of the branches in the book. Remove the tick “Exported” to leave the individuals of a branch out.' => 'Jede Zeile ist ein Zweig. Die Reihenfolge der Zeilen ist die Reihenfolge der Zweige im Buch. Nimm den Haken „Exportieren“ weg, um die Personen eines Zweigs wegzulassen.',
-                'A set remembers which branches are exported, e.g. for a book for one relative. You can switch between sets.' => 'Ein Satz merkt sich, welche Zweige exportiert werden, z. B. für ein Buch für einen Verwandten. Du kannst zwischen Sätzen umschalten.',
-                'The book and the chart have lists of their own. A set remembers the selection of both lists and is applied to both unless you choose otherwise.' => 'Buch und Grafik haben je eine eigene Liste. Ein Satz merkt sich die Auswahl beider Listen und wird auf beide angewendet, wenn du nichts anderes wählst.',
-                'Sets' => 'Sätze',
-                'No set is active.' => 'Kein Satz ist aktiv.',
-                'Active set:' => 'Aktiver Satz:',
-                'The branches match the set.' => 'Die Zweige entsprechen dem Satz.',
-                'Compared with the saved lists of the book and the chart. Save the set again to include changes.' => 'Verglichen mit den gespeicherten Listen von Buch und Grafik. Speichere den Satz erneut, um Änderungen zu übernehmen.',
-                'There are no sets yet. Use “Save as set” below the table.' => 'Es gibt noch keine Sätze. Nutze „Als Satz speichern“ unter der Tabelle.',
-                'Set' => 'Satz',
                 '%s (cannot be read)' => '%s (nicht lesbar)',
-                'Apply to the book and the chart' => 'Auf Buch und Grafik anwenden',
-                'Apply set' => 'Satz anwenden',
                 'Rename' => 'Umbenennen',
                 'Default headings' => 'Standard-Überschriften',
                 'LaTeX command that starts the heading, e.g. \\chapter{ – the module adds the name of the branch and the closing brace. A branch uses these values unless it has headings of its own.' => 'LaTeX-Befehl, mit dem die Überschrift beginnt, z. B. \\chapter{ – das Modul ergänzt den Namen des Zweigs und die schließende Klammer. Ein Zweig verwendet diese Werte, wenn er keine eigenen Überschriften hat.',
@@ -334,15 +348,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 'There are no branches. Without branches the export contains all individuals connected with the reference individual.' => 'Es gibt keine Zweige. Ohne Zweige enthält der Export alle Personen, die mit der Bezugsperson verbunden sind.',
                 'Direction: the branch starts with the start individual and first goes to the parents, to spouses and children, or both. From there it continues in all directions until it reaches a stop individual. A stop individual still belongs to the branch, but the branch does not continue beyond it.' => 'Richtung: Der Zweig beginnt bei der Startperson und geht zuerst zu den Eltern, zu Ehepartnern und Kindern oder in beide Richtungen. Von dort geht er in alle Richtungen weiter, bis er eine Stopp-Person erreicht. Eine Stopp-Person gehört noch zum Zweig, der Zweig geht aber nicht über sie hinaus.',
                 'If a later branch reaches individuals of an earlier branch, they move to the later branch. Switching a branch off does not change which branch an individual belongs to.' => 'Erreicht ein späterer Zweig Personen eines früheren Zweigs, wechseln sie in den späteren Zweig. Das Ausschalten eines Zweigs ändert nicht, zu welchem Zweig eine Person gehört.',
-                'Name of the set' => 'Name des Satzes',
-                'Name of the set, e.g. Book for …' => 'Name des Satzes, z. B. Buch für …',
-                'Save as set' => 'Als Satz speichern',
-                '“Save as set” saves the table and remembers which branches of the book and of the chart are exported.' => '„Als Satz speichern“ speichert die Tabelle und merkt sich, welche Zweige von Buch und Grafik exportiert werden.',
                 '%1$s of %2$s branches are exported.' => '%1$s von %2$s Zweigen werden exportiert.',
-                '%1$s: %2$s branch of the set no longer exists.' . I18N::PLURAL . '%1$s: %2$s branches of the set no longer exist.' => '%1$s: %2$s Zweig des Satzes gibt es nicht mehr.' . I18N::PLURAL . '%1$s: %2$s Zweige des Satzes gibt es nicht mehr.',
-                '%s branch differs from the set.' . I18N::PLURAL . '%s branches differ from the set.' => '%s Zweig weicht vom Satz ab.' . I18N::PLURAL . '%s Zweige weichen vom Satz ab.',
-                '%s branch is not in the set.' . I18N::PLURAL . '%s branches are not in the set.' => '%s Zweig ist nicht im Satz.' . I18N::PLURAL . '%s Zweige sind nicht im Satz.',
-                'The sets could not be read: %s' => 'Die Sätze konnten nicht gelesen werden: %s',
             ];
         }
 
@@ -393,9 +399,9 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
     /**
      * The reference individual preselected in the form
      *
-     * Order: refid of the submitted form, xref of the URL, the individual used last in the form
-     * (setting of the user per tree), the default individual of the user resp. of the tree
-     * (Tree::significantIndividual). Individuals that the user may not see are skipped.
+     * Order: refid of the submitted form, the reference individual of the active profile, xref of the URL,
+     * the individual used last in the form (setting of the user per tree), the default individual of the user
+     * resp. of the tree (Tree::significantIndividual). Individuals that the user may not see are skipped.
      *
      * @param ServerRequestInterface $request
      * @param Tree $tree
@@ -405,8 +411,16 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
     {
         $user = Auth::user();
         $body = $request->getParsedBody();
+        $profile_refid = '';
+        try {
+            $profiles = $this->readProfiles($tree);
+            $profile_refid = $profiles[$this->activeProfile($tree, $profiles)]['refid'] ?? '';
+        } catch (FilesystemException $ex) {
+            $profile_refid = '';
+        }
         $candidates = array(
             is_array($body) && is_string($body['refid'] ?? null) ? $body['refid'] : '',
+            $profile_refid,
             Validator::queryParams($request)->isXref()->string('xref', ''),
             Auth::check() ? $user->getPreference(self::PREF_LAST_REFID . $tree->id()) : '',
         );
@@ -497,12 +511,14 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         $individual = $this->referenceIndividual($request, $tree);
         $user = Validator::attributes($request)->user();
         $review = (int) $user->getPreference(self::PREF_MEDIA_REVIEW . $tree->id(), '0');
+        $profile = $this->profileBarData($request, $tree, 'media');
 
-        $selection = $this->mediaSelection($tree, $individual);
+        $selection = $this->mediaSelection($tree, $individual, $profile['active']);
 
         return $this->viewResponse($this->name() . '::media', array_merge(
             $this->mediaPageData($tree, $selection, $review),
             [
+                'profile' => $profile,
                 'title' => I18N::translate('Family book') . ' – ' . $this->pageTitle('media'),
                 'tree' => $tree,
                 'individual' => $individual,
@@ -511,6 +527,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 'form_url' => $this->pageUrl($tree, 'media', $individual?->xref() ?? ''),
                 'latex_url' => $this->pageUrl($tree, 'latex', $individual?->xref() ?? ''),
                 'latex_title' => $this->pageTitle('latex'),
+                'module_name' => $this->name(),
             ]
         ));
     }
@@ -536,11 +553,16 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         $mod_action = is_array($body) && is_string($body['mod_action'] ?? null) ? $body['mod_action'] : '';
         $posted = is_array($body) && is_string($body['exclude'] ?? null) ? $body['exclude'] : '';
 
+        if (!$this->checkFormProfile($request, $tree)) {
+            return redirect($url);
+        }
+        $profile = $this->activeProfile($tree);
+
         if ($mod_action === 'review_media') {
             $user->setPreference(self::PREF_MEDIA_REVIEW . $tree->id(), (string) time());
             FlashMessages::addMessage(e(I18N::translate('The images have been marked as reviewed.')), 'success');
         } elseif ($mod_action === 'save_media') {
-            $selection = $this->mediaSelection($tree, $individual);
+            $selection = $this->mediaSelection($tree, $individual, $profile);
 
             // the images of the page (upper case => xref); images of the include list cannot be left out
             $all = array();
@@ -569,7 +591,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 FlashMessages::addMessage(e(I18N::translate('The selection contains images that are not part of the book: %s', implode(', ', array_slice($unknown, 0, 10)))), 'danger');
             } else {
                 try {
-                    $changed = $this->saveExcludeMedia($tree, $managed, $exclude, $selection['exclude_value']);
+                    $changed = $this->saveExcludeMedia($tree, $profile, $managed, $exclude, $selection['exclude_value']);
                     $user->setPreference(self::PREF_MEDIA_REVIEW . $tree->id(), (string) time());
                     FlashMessages::addMessage(e($changed
                         ? I18N::translate('The image selection has been saved.')
@@ -584,19 +606,20 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
     }
 
     /**
-     * The images of the book with the default settings of the tree
+     * The images of the book with the settings of a profile
      *
      * Uses the selection of the LaTeX export (individuals of the branches, media loops of the templates,
      * privacy), see ExportFamilyBookData::collectLatexMedia().
      *
      * @param Tree $tree
      * @param Individual|null $individual reference individual
+     * @param string $profile ID of the profile ('' = Standard)
      * @return array{collected: array, include: array<string,true>, exclude: array<string,true>, exclude_value: string}
      *         include/exclude: media IDs (upper case) of the lists include_media/exclude_media
      */
-    private function mediaSelection(Tree $tree, ?Individual $individual): array
+    private function mediaSelection(Tree $tree, ?Individual $individual, string $profile): array
     {
-        $settings = $this->readDefaultSettings('latex', $tree);
+        $settings = $this->readProfileSettings('latex', $tree, $profile);
         $settings['refid'] = $individual?->xref() ?? '';
 
         return array(
@@ -728,6 +751,11 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         assert($tree instanceof Tree);
         $this->checkAccess($request, $tree);
         $individual = $this->referenceIndividual($request, $tree);
+        $profile = $this->profileBarData($request, $tree, $export_type);
+        $this->form_profile = array(
+            'id' => $profile['active'],
+            'own' => $this->profileOwnFields($export_type, $tree, $profile['active']),
+        );
 
         $other_type = $export_type === 'latex' ? 'graphml' : 'latex';
 
@@ -740,7 +768,8 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             'export_type' => $export_type,
             'other_url' => $this->pageUrl($tree, $other_type, $individual === null ? '' : $individual->xref()),
             'other_title' => $this->pageTitle($other_type),
-            'settings' => $settings
+            'settings' => $settings,
+            'profile' => $profile,
         ]);
     }
 
@@ -865,22 +894,12 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 break;
             case "save_tree_settings_graphml":
             case "save_tree_settings_latex":
-                // save the form as default settings of the tree (files in the data folder)
-                $export_type = ($mod_action == 'save_tree_settings_graphml') ? 'graphml' : 'latex';
-                $settings = $this->settingsFromForm($export_type, $parsedBodys);
-                $user = Validator::attributes($request)->user();
-                if (!Auth::isManager($tree, $user)) {
-                    FlashMessages::addMessage(e(I18N::translate('Only managers of the family tree can save the default settings of the tree.')), 'danger');
-                } else {
-                    $folder = $this->treeSettingsFolder($tree, $export_type);
-                    try {
-                        $this->writeTreeSettings($export_type, $folder, $settings);
-                        FlashMessages::addMessage(e(I18N::translate('The settings have been saved as default of the tree in %s.', Registry::filesystem()->dataName() . $folder)), 'success');
-                    } catch (FilesystemException | JsonException $ex) {
-                        FlashMessages::addMessage(e(I18N::translate('The settings could not be saved in %s: %s', Registry::filesystem()->dataName() . $folder, $ex->getMessage())), 'danger');
-                    }
-                }
-                $response = $this->showPage($request, $page_type, $settings);
+            case "save_new_profile_graphml":
+            case "save_new_profile_latex":
+                // save the form in the active profile resp. in a new profile (files in the data folder)
+                $this->saveProfileForm($request, $tree, $page_type, $parsedBodys, str_starts_with($mod_action, 'save_new_profile_'));
+                // show the saved state
+                $response = redirect($this->pageUrl($tree, $page_type, Validator::queryParams($request)->isXref()->string('xref', '')));
                 break;
             default:
                 $response = $this->showPage($request, $page_type, $settings);
@@ -1475,13 +1494,17 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
      * the line endings chosen by the user are kept as long as the value is the same.
      * README.txt is only written if it does not exist.
      *
+     * With $merge, only the given fields are changed: the other short fields of settings.json stay,
+     * settings.json is not created for no short field, and no README.txt is written.
+     *
      * @param string $export_type 'latex' or 'graphml'
      * @param string $folder folder relative to the data folder
      * @param array<string,string> $settings
+     * @param bool $merge
      * @throws FilesystemException
      * @throws JsonException
      */
-    public function writeTreeSettings(string $export_type, string $folder, array $settings): void
+    public function writeTreeSettings(string $export_type, string $folder, array $settings, bool $merge = false): void
     {
         $data = Registry::filesystem()->data();
         $data->createDirectory($folder);
@@ -1500,7 +1523,10 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 $old = null;
             }
         }
-        if ($old !== $short) {
+        if ($merge) {
+            $short = array_merge($old ?? array(), $short);
+        }
+        if ($old !== $short && !($merge && $old === null && $short === array())) {
             $data->write($file, $this->encodeSettings($export_type, $short));
         }
 
@@ -1521,30 +1547,32 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             }
         }
 
-        if (!$data->fileExists($folder . '/README.txt')) {
+        if (!$merge && !$data->fileExists($folder . '/README.txt')) {
             $data->write($folder . '/README.txt', $this->treeSettingsReadme($export_type));
         }
     }
 
 
     /**
-     * Save the image selection: update exclude_media.txt in the folder of the tree
+     * Save the image selection: update exclude_media.txt in the folder of the profile
      *
      * Only the IDs of the images on the page are added or removed; all other lines, IDs and
-     * comments of the file stay as they are. Without the file, the current list (taken from the
-     * module folder) is the starting point. The folder is created if necessary.
+     * comments of the file stay as they are. Without the file, the current list (e.g. taken from the
+     * module folder or the common settings) is the starting point. The folder is created if necessary.
+     * For a profile other than Standard the list becomes a value of the profile of its own.
      *
      * @param Tree $tree
+     * @param string $profile ID of the profile ('' = Standard)
      * @param array<string,string> $managed images of the page that can be left out (upper case => xref)
      * @param array<string,string> $exclude images to leave out (upper case => xref)
      * @param string $current the current list exclude_media (comma separated)
      * @return bool false if nothing has changed
      * @throws FilesystemException
      */
-    private function saveExcludeMedia(Tree $tree, array $managed, array $exclude, string $current): bool
+    private function saveExcludeMedia(Tree $tree, string $profile, array $managed, array $exclude, string $current): bool
     {
         $data = Registry::filesystem()->data();
-        $folder = $this->treeSettingsFolder($tree, 'latex');
+        $folder = $this->profileSettingsFolder($tree, $profile, 'latex');
         $file = $folder . '/exclude_media.txt';
 
         $old = $data->fileExists($file) ? $data->read($file) : $this->encodeListFile($current);
@@ -1555,7 +1583,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         $data->createDirectory($folder);
         $data->write($file, $new);
-        if (!$data->fileExists($folder . '/README.txt')) {
+        if ($profile === '' && !$data->fileExists($folder . '/README.txt')) {
             $data->write($folder . '/README.txt', $this->treeSettingsReadme('latex'));
         }
 
@@ -1630,27 +1658,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
 
     /**
-     * Table row with the button to save the form as default settings of the tree (managers only)
-     *
-     * @param Tree $tree
-     * @param string $export_type 'latex' or 'graphml'
-     * @param int $colspan
-     * @return string
-     */
-    private function saveTreeSettingsRow(Tree $tree, string $export_type, int $colspan): string
-    {
-        if (!Auth::isManager($tree)) {
-            return '';
-        }
-
-        return '<tr><td class="topbottombar" colspan="' . $colspan . '">' .
-            '<button type="submit" name="mod_action" value="save_tree_settings_' . $export_type . '">' .
-            e(I18N::translate('Save as default for this tree')) . '</button>' .
-            '</td></tr>';
-    }
-
-
-    /**
      * Text of README.txt in the folder of a tree
      *
      * @param string $export_type 'latex' or 'graphml'
@@ -1670,8 +1677,10 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         $lines = array(
             "ExportFamilyBook: default settings of this family tree ($export_type export)",
             '',
-            'The module reads these files when its page is opened for this tree.',
-            'The button "Save as default for this tree" (managers of the tree only) writes them.',
+            'These files are the profile "Standard": the common settings of all profiles of this tree.',
+            'The module reads them when its page is opened for this tree. The button "Save profile"',
+            '(managers of the tree only, profile Standard) writes them; other profiles write the',
+            'settings that are not their own values here, too (see ../profiles/README.txt).',
             'You can edit them with a text editor: UTF-8, LF or CRLF line endings.',
             '',
             'settings.json',
@@ -1707,8 +1716,8 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         if ($export_type === 'latex') {
             $lines[] = 'The page "Image selection" of the module changes exclude_media.txt and keeps its comments.';
         }
-        $lines[] = 'The page "Branches and sets" of the module changes branch_seeds.txt and keeps lines it does not understand.';
-        $lines[] = 'Its sets are stored in ../branch_sets (see README.txt there).';
+        $lines[] = 'The page "Branches" of the module changes branch_seeds.txt and keeps lines it does not understand.';
+        $lines[] = 'Which branches a profile exports is stored in ../profiles/<profile>/branches.json.';
 
         return implode("\n", $lines) . "\n";
     }
@@ -1723,12 +1732,12 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
      * @param array $settings
      *        	The setting in the form
      */
-    public function setParameterGraphml(?array $settings, Tree $tree, ?Individual $individual)
+    public function setParameterGraphml(?array $settings, Tree $tree, ?Individual $individual, string $profile = '')
     {
 
         // fill read settings if not passed
         if (is_null($settings)) {
-            $settings = $this->readDefaultSettings('graphml', $tree);
+            $settings = $this->readProfileSettings('graphml', $tree, $profile);
         };
 
         // header
@@ -1786,11 +1795,11 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             foreach (array(
                 "label", "description"
             ) as $s2) {
+                $name = $s1 . "_" . $s2 . "_template";
                 echo '<tr><td class="descriptionbox width30 wrap">', I18N::translate(
                     "Node " . $s2
-                ), '</td>';
+                ), $this->profileFieldToggle($name), '</td>';
 
-                $name = $s1 . "_" . $s2 . "_template";
                 $s = array_key_exists($name, $settings) ? $settings[$name] : "";
                 $nrow = substr_count($s, "\n") + 1;
 
@@ -2119,7 +2128,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         echo '<tr><td class="topbottombar" colspan="6">', '<button name="mod_action" value="download_settings_graphml">', I18N::translate(
             'Download Settings'
         ), '</button></td></tr>';
-        echo $this->saveTreeSettingsRow($tree, 'graphml', 6);
+        echo $this->saveProfileRow($tree, 'graphml', 6);
         echo '</table></form>';
         // echo '</table></form>';
 
@@ -2173,13 +2182,13 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
      * @param array $settings
      *        	The setting in the form
      */
-    public function setParameterLatex(?array $settings, Tree $tree, ?Individual $individual)
+    public function setParameterLatex(?array $settings, Tree $tree, ?Individual $individual, string $profile = '')
     {
         $help_text = $this->helpScript($this->getHelpText("latex"));
 
         // fill read settings if not passed
         if (is_null($settings)) {
-            $settings = $this->readDefaultSettings('latex', $tree);
+            $settings = $this->readProfileSettings('latex', $tree, $profile);
         };
 
         // header line 
@@ -2230,7 +2239,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         echo '<tr><td class="descriptionbox width30 wrap">', I18N::translate(
             "Preamble"
-        ), '</td>';
+        ), $this->profileFieldToggle('preamble'), '</td>';
 
         $name = "preamble";
         $s = (array_key_exists($name, $settings) ? $settings[$name] : "");
@@ -2250,7 +2259,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         echo '<tr><td class="descriptionbox width30 wrap">', I18N::translate(
             "Title"
-        ), '</td>';
+        ), $this->profileFieldToggle('title'), '</td>';
 
         $name = "title";
         $s = (array_key_exists($name, $settings) ? $settings[$name] : "");
@@ -2274,7 +2283,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         // Node text
         echo  '</td></tr><tr><td class="descriptionbox width30 wrap">', I18N::translate(
             "Section summary lable"
-        ), '</td>';
+        ), $this->profileFieldToggle('individuals_summary_label_template'), '</td>';
 
         $name = "individuals_summary_label_template";
         $s = (array_key_exists($name, $settings) ? $settings[$name] : "");
@@ -2289,7 +2298,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         // Node text
         echo  '</td></tr><tr><td class="descriptionbox width30 wrap">', I18N::translate(
             "Node label"
-        ), '</td>';
+        ), $this->profileFieldToggle('individuals_label_template'), '</td>';
 
         $name = "individuals_label_template";
         $s = (array_key_exists($name, $settings) ? $settings[$name] : "");
@@ -2310,7 +2319,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         echo '<tr><td class="descriptionbox width30 wrap">', I18N::translate(
             "Epilog"
-        ), '</td>';
+        ), $this->profileFieldToggle('epilog'), '</td>';
 
         $name = "epilog";
         $s = (array_key_exists($name, $settings) ? $settings[$name] : "");
@@ -2353,7 +2362,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         echo '<tr><td class="descriptionbox width30 wrap">', I18N::translate(
             "Symbols"
-        ), '</td>';
+        ), $this->profileFieldToggle('symbols'), '</td>';
 
         $name = "symbols";
         $s = (array_key_exists($name, $settings) ? $settings[$name] : "");
@@ -2375,7 +2384,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         echo '<tr><td class="descriptionbox width30 wrap">', I18N::translate(
             "Include"
-        ), '</td>';
+        ), $this->profileFieldToggle('include_media'), '</td>';
         $name = "include_media";
         $s = (array_key_exists($name, $settings) ? $settings[$name] : "");
         $nrow = min(2, substr_count($s, "\n") + 1);
@@ -2386,7 +2395,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         echo '<tr><td class="descriptionbox width30 wrap">', I18N::translate(
             "Exclude"
-        ), '</td>';
+        ), $this->profileFieldToggle('exclude_media'), '</td>';
         $name = "exclude_media";
         $s = (array_key_exists($name, $settings) ? $settings[$name] : "");
         $nrow = min(2, substr_count($s, "\n") + 1);
@@ -2466,7 +2475,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         echo '<tr><td class="topbottombar" colspan="7">', '<button name="mod_action" value="download_settings_latex">', I18N::translate(
             'Download Settings'
         ), '</button></td></tr>';
-        echo $this->saveTreeSettingsRow($tree, 'latex', 7);
+        echo $this->saveProfileRow($tree, 'latex', 7);
         echo '</table></form>';
         // echo '</table></form>';
 

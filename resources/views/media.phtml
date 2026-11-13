@@ -16,6 +16,7 @@
  * @var string $form_url
  * @var string $latex_url
  * @var string $latex_title
+ * @var array $profile see ExportFamilyBookProfiles::profileBarData()
  */
 
 use Fisharebest\Webtrees\I18N;
@@ -52,8 +53,9 @@ $counter = static function (string $text, array $spans): string {
     <p>
         <a href="<?= e($latex_url) ?>"><?= e(I18N::translate('Go to %s', $latex_title)) ?></a>
     </p>
+    <?= view($module_name . '::profile_bar', ['profile' => $profile]) ?>
     <p>
-        <?= e(I18N::translate('These are the images that the book would contain with the default settings of this family tree. Remove the tick to leave an image out of the book.')) ?>
+        <?= e(I18N::translate('These are the images that the book of the active profile would contain. Remove the tick to leave an image out of the book.')) ?>
         <?= e(I18N::translate('An image linked to several individuals is shown with each of them. The tick applies to the image.')) ?>
         <?php if ($individual !== null) : ?>
             <br>
@@ -65,6 +67,7 @@ $counter = static function (string $text, array $spans): string {
         <form method="post" action="<?= e($form_url) ?>" id="efb-form" class="mb-2">
             <?= csrf_field() ?>
             <input type="hidden" name="exclude" id="efb-exclude" value="">
+            <input type="hidden" name="profile" value="<?= e($profile['active']) ?>">
             <?php if ($can_save) : ?>
                 <button type="submit" class="btn btn-primary" name="mod_action" value="save_media"><?= e(I18N::translate('Save selection')) ?></button>
                 <button type="submit" class="btn btn-secondary" name="mod_action" value="review_media"><?= e(I18N::translate('Mark as reviewed')) ?></button>

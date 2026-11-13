@@ -26,13 +26,15 @@ $escaped_help_content = json_encode($html_help_content, JSON_HEX_TAG | JSON_HEX_
     <button onclick="openPopup()"><?= I18N::translate('Open Help Window')?></button>
 </p>
 
+<?= view($module->name() . '::profile_bar', ['profile' => $profile]) ?>
+
 <?php
 
 // -------------------------------------------------------------------------------
 // form with the settings (default settings of the tree resp. module, or the uploaded settings)
 if ($export_type === 'latex') {
-    $module->setParameterLatex($settings, $tree, $individual);
+    $module->setParameterLatex($settings, $tree, $individual, $profile['active']);
 } else {
-    $module->setParameterGraphml($settings, $tree, $individual);
+    $module->setParameterGraphml($settings, $tree, $individual, $profile['active']);
 }
 ?>
