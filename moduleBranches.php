@@ -3,8 +3,9 @@
 /**
  * ExportFamilyBook module for Webtrees: page "Branches"
  *
- * The list of branch seeds (setting branch_seeds) as a table, and named sets that remember
- * which branches are exported (column 7 include/exclude of the list).
+ * The list of branch seeds (setting branch_seeds) of the active profile as a table. The structure of the
+ * list is common to all profiles, which branches are exported (column 7 include/exclude) belongs to the
+ * profile (see moduleProfiles.php).
  *
  * Format of the list (read by ExportFamilyBookData::getSeeds()): the first two characters are the
  * separators (columns, lists). One branch per line, 3 to 7 columns:
@@ -32,15 +33,9 @@ trait ExportFamilyBookBranches
     // Allowed values of column 3 (as checked by the export)
     private const BRANCH_DIRECTIONS = array('both', 'ancestors', 'descendants');
 
-    // Named sets: one JSON file per set in this folder of the tree (next to latex/ and graphml/)
-    private const BRANCH_SETS_FOLDER = 'branch_sets';
-
-    // File in the folder of the tree with the ID of the set applied last
-    private const BRANCH_SET_ACTIVE_FILE = 'branch_set_active.txt';
-
+    // Format of the file branches.json of a profile (the same as the sets of branches of version 2.2.0-4b)
     private const BRANCH_SET_FORMAT = 'ExportFamilyBook-branch-set';
     private const BRANCH_SET_VERSION = 1;
-    private const BRANCH_SET_NAME_LENGTH = 80;
 
     // Upper limit for the number of lines sent by the form
     private const BRANCH_ROWS_MAX = 5000;
@@ -58,7 +53,7 @@ trait ExportFamilyBookBranches
     }
 
     /**
-     * Forms of the page "Branches" (managers only): save the list, save/apply/rename/delete a set
+     * Form of the page "Branches" (managers only): save the list of the active profile
      */
     public function postBranchesAction(ServerRequestInterface $request): ResponseInterface
     {
@@ -78,20 +73,13 @@ trait ExportFamilyBookBranches
         $body = is_array($body) ? $body : array();
         $post = static fn (string $name): string => is_string($body[$name] ?? null) ? $body[$name] : '';
 
+        if (!$this->checkFormProfile($request, $tree)) {
+            return redirect($url);
+        }
+
         try {
-            switch ($post('mod_action')) {
-                case 'save_branches':
-                case 'save_set':
-                    return $this->saveBranchesForm($request, $tree, $list, $post);
-                case 'apply_set':
-                    $this->applyBranchSetForm($tree, $list, $post('set_id'), $post('apply_both') === '1');
-                    break;
-                case 'rename_set':
-                    $this->renameBranchSet($tree, $post('set_id'), $post('new_name'));
-                    break;
-                case 'delete_set':
-                    $this->deleteBranchSet($tree, $post('set_id'));
-                    break;
+            if ($post('mod_action') === 'save_branches') {
+                return $this->saveBranchesForm($request, $tree, $list, $post);
             }
         } catch (FilesystemException | JsonException $ex) {
             FlashMessages::addMessage(e(I18N::translate('The branches could not be saved: %s', $ex->getMessage())), 'danger');
@@ -142,31 +130,13 @@ trait ExportFamilyBookBranches
         $parsed = $this->parseSeedList($value);
         $states = $this->branchStates($parsed['items']);
 
-        try {
-            $sets = $this->readBranchSets($tree);
-            $active_id = $this->readActiveBranchSet($tree, $sets);
-        } catch (FilesystemException $ex) {
-            FlashMessages::addMessage(e(I18N::translate('The sets could not be read: %s', $ex->getMessage())), 'danger');
-            $sets = array();
-            $active_id = null;
-        }
-        $active = null;
+        $profile = $this->profileBarData($request, $tree, 'branches', $list);
+        $active = $profile['active'];
+        // branches that are not in the selection of the profile yet (added later): they use the common state
         $new_keys = array();
-        if ($active_id !== null) {
-            $compare = array();
-            foreach (self::BRANCH_LISTS as $type) {
-                $type_states = ($type === $list) ? $states : $this->branchStates($this->parseSeedList($this->currentSeedList($tree, $type))['items']);
-                $compare[$type] = $this->compareBranchSet($sets[$active_id], $type, $type_states);
-            }
-            $new_keys = $compare[$list]['new_keys'];
-            $active = array(
-                'id' => $active_id,
-                'name' => $sets[$active_id]['name'],
-                'differ' => count($compare['latex']['differ']) + count($compare['graphml']['differ']),
-                'new' => count($compare['latex']['new']) + count($compare['graphml']['new']),
-                'differ_here' => $compare[$list]['differ'],
-                'new_here' => $compare[$list]['new'],
-            );
+        $entries = $this->readProfileBranches($tree, $active)[$list] ?? null;
+        if ($entries !== null && !in_array('branch_seeds', $this->profileOwnFields($list, $tree, $active), true)) {
+            $new_keys = array_map('strval', array_keys(array_diff_key($states, $entries)));
         }
 
         if ($rows === null) {
@@ -174,21 +144,17 @@ trait ExportFamilyBookBranches
         }
         foreach ($rows as $index => $row) {
             $rows[$index]['errors'] = $errors[$row['id']] ?? array();
-            $rows[$index]['new'] = ($row['type'] === 'branch' && $active !== null && str_starts_with($row['id'], 'o')
+            $rows[$index]['new'] = ($row['type'] === 'branch' && str_starts_with($row['id'], 'o')
                 && in_array($this->branchRowKey($rows, $index), $new_keys, true));
         }
 
-        $settings = $this->readDefaultSettings('latex', $tree);
+        $settings = $this->readProfileSettings('latex', $tree, $active);
         $headings ??= array(
             'h5' => $settings['hierarchy_sub_branch'] ?? '',
             'h6' => $settings['hierarchy_generation'] ?? '',
         );
 
         $xref = Validator::queryParams($request)->isXref()->string('xref', '');
-        $set_list = array();
-        foreach ($sets as $id => $set) {
-            $set_list[] = array('id' => $id, 'name' => $set['name'], 'saved' => $set['saved'], 'broken' => $set['broken']);
-        }
 
         return $this->viewResponse($this->name() . '::branches', array(
             'title' => I18N::translate('Family book') . ' – ' . $this->pageTitle('branches'),
@@ -204,8 +170,8 @@ trait ExportFamilyBookBranches
             'base' => md5($value),
             'unsaved' => $unsaved,
             'headings' => $headings,
-            'sets' => $set_list,
-            'active' => $active,
+            'profile' => $profile,
+            'module_name' => $this->name(),
             'form_url' => $this->pageUrl($tree, 'branches', $xref, $list === 'latex' ? array() : array('list' => $list)),
             'tab_urls' => array(
                 'latex' => $this->pageUrl($tree, 'branches', $xref),
@@ -220,11 +186,11 @@ trait ExportFamilyBookBranches
     }
 
     /**
-     * The current list of a type (data folder of the tree, else module folder)
+     * The current list of a type of the active profile (data folder of the tree, else module folder)
      */
     private function currentSeedList(Tree $tree, string $list): string
     {
-        return $this->readDefaultSettings($list, $tree)['branch_seeds'] ?? '';
+        return $this->readProfileSettings($list, $tree, $this->activeProfile($tree))['branch_seeds'] ?? '';
     }
 
     /**
@@ -535,16 +501,6 @@ trait ExportFamilyBookBranches
             }
         }
 
-        $set_name = trim($post('set_name'));
-        $sets = $this->readBranchSets($tree);
-        $set_id = null;
-        if ($post('mod_action') === 'save_set') {
-            $set_id = $this->branchSetIdForName($set_name, $sets, null, true);
-            if ($set_id === null) {
-                $errors['set'][] = $this->branchSetNameError($set_name, $sets, null, true);
-            }
-        }
-
         if ($errors !== array()) {
             $messages = array();
             foreach ($errors as $row_errors) {
@@ -560,18 +516,9 @@ trait ExportFamilyBookBranches
             $changed = $this->saveDefaultHeadings($tree, $headings) || $changed;
         }
 
-        if ($set_id !== null) {
-            $exists = array_key_exists($set_id, $sets);
-            $this->writeBranchSet($tree, $set_id, $set_name);
-            $this->writeActiveBranchSet($tree, $set_id);
-            FlashMessages::addMessage(e($exists
-                ? I18N::translate('The set “%s” has been updated.', $set_name)
-                : I18N::translate('The set “%s” has been saved.', $set_name)), 'success');
-        } else {
-            FlashMessages::addMessage(e($changed
-                ? I18N::translate('The branches have been saved.')
-                : I18N::translate('The branches have not changed.')), 'success');
-        }
+        FlashMessages::addMessage(e($changed
+            ? I18N::translate('The branches have been saved.')
+            : I18N::translate('The branches have not changed.')), 'success');
 
         return redirect($url);
     }
@@ -740,20 +687,38 @@ trait ExportFamilyBookBranches
     }
 
     /**
-     * Write the list of a type to the data folder of the tree (only if it has changed)
+     * Save the list of a type of the active profile (only if it has changed)
+     *
+     * Standard: branch_seeds.txt of the tree. Other profiles: the structure goes to the common list,
+     * which branches are exported to the profile (unless the profile has a list of its own).
      *
      * @throws FilesystemException
+     * @throws JsonException
      */
     private function saveSeedList(Tree $tree, string $list, string $new, string $current): bool
     {
-        if ($new === $current) {
-            return false;
+        $profiles = $this->readProfiles($tree);
+        $id = $this->activeProfile($tree, $profiles);
+        if ($id !== '' && !in_array('branch_seeds', $this->profileOwnFields($list, $tree, $id), true)) {
+            // the selection of the profile is saved even if the list is the same (branches added later)
+            $common = $this->readDefaultSettings($list, $tree)['branch_seeds'] ?? '';
+            $split = $this->splitSeedList($new, $common);
+            $changed = $this->writeProfileBranches($tree, $id, $list, $split['states'], $this->profileName($id, $profiles));
+            $new = $split['common'];
+            if ($new === $common) {
+                return $changed && $split['states'] !== null;
+            }
+            $folder = $this->treeSettingsFolder($tree, $list);
+        } else {
+            if ($new === $current) {
+                return false;
+            }
+            $folder = $this->profileSettingsFolder($tree, $id, $list);
         }
         $data = Registry::filesystem()->data();
-        $folder = $this->treeSettingsFolder($tree, $list);
         $data->createDirectory($folder);
         $data->write($folder . '/branch_seeds.txt', $this->encodeTextFile($new));
-        if (!$data->fileExists($folder . '/README.txt')) {
+        if (!$data->fileExists($folder . '/README.txt') && $folder === $this->treeSettingsFolder($tree, $list)) {
             $data->write($folder . '/README.txt', $this->treeSettingsReadme($list));
         }
 
@@ -771,16 +736,20 @@ trait ExportFamilyBookBranches
      */
     private function saveDefaultHeadings(Tree $tree, array $headings): bool
     {
-        $settings = $this->readDefaultSettings('latex', $tree);
+        $id = $this->activeProfile($tree);
+        $settings = $this->readProfileSettings('latex', $tree, $id);
         $new = array('hierarchy_sub_branch' => $headings['h5'], 'hierarchy_generation' => $headings['h6']);
         if (($settings['hierarchy_sub_branch'] ?? '') === $new['hierarchy_sub_branch']
             && ($settings['hierarchy_generation'] ?? '') === $new['hierarchy_generation']) {
             return false;
         }
 
-        // only these two values of settings.json change
+        // only these two values of settings.json change (in the profile if they are its own values, else common)
         $data = Registry::filesystem()->data();
-        $folder = $this->treeSettingsFolder($tree, 'latex');
+        $own = $this->profileOwnFields('latex', $tree, $id);
+        $folder = (in_array('hierarchy_sub_branch', $own, true) || in_array('hierarchy_generation', $own, true))
+            ? $this->profileSettingsFolder($tree, $id, 'latex')
+            : $this->treeSettingsFolder($tree, 'latex');
         $file = $folder . '/settings.json';
         $short = array();
         if ($data->fileExists($file)) {
@@ -792,7 +761,7 @@ trait ExportFamilyBookBranches
         }
         $data->createDirectory($folder);
         $data->write($file, $this->encodeSettings('latex', array_merge($short, $new)));
-        if (!$data->fileExists($folder . '/README.txt')) {
+        if (!$data->fileExists($folder . '/README.txt') && $folder === $this->treeSettingsFolder($tree, 'latex')) {
             $data->write($folder . '/README.txt', $this->treeSettingsReadme('latex'));
         }
 
@@ -839,42 +808,8 @@ trait ExportFamilyBookBranches
     }
 
     /**
-     * Folder of a tree with the settings of both export types and the sets
-     */
-    private function treeBaseFolder(Tree $tree): string
-    {
-        return self::TREE_SETTINGS_FOLDER . '/' . $this->treeFolderName($tree->name());
-    }
-
-    /**
-     * The sets of a tree, sorted by name
-     *
-     * @param Tree $tree
-     * @return array<string,array{name: string, saved: string, lists: array<string,array<string,array{name: string, include: bool}>>, broken: bool}>
-     *         ID (file name without .json) => set
-     * @throws FilesystemException
-     */
-    private function readBranchSets(Tree $tree): array
-    {
-        $data = Registry::filesystem()->data();
-        $folder = $this->treeBaseFolder($tree) . '/' . self::BRANCH_SETS_FOLDER;
-        if (!$data->directoryExists($folder)) {
-            return array();
-        }
-        $sets = array();
-        foreach ($data->listContents($folder, false) as $entry) {
-            if (!$entry->isFile() || preg_match('/^([A-Za-z0-9_-]{1,200})\.json$/', basename($entry->path()), $match) !== 1) {
-                continue;
-            }
-            $sets[$match[1]] = $this->decodeBranchSet($data->read($entry->path()), $match[1]);
-        }
-        uasort($sets, static fn (array $a, array $b): int => strnatcasecmp($a['name'], $b['name']));
-
-        return $sets;
-    }
-
-    /**
-     * Read a set file. A file that cannot be read is returned as a broken set (it can be deleted).
+     * Read a file with the selection of branches (branches.json of a profile, or a set of version 2.2.0-4b).
+     * A file that cannot be read is returned as broken.
      */
     private function decodeBranchSet(string $content, string $id): array
     {
@@ -884,11 +819,12 @@ trait ExportFamilyBookBranches
         } catch (JsonException $ex) {
             return $set;
         }
-        if (!is_array($json) || ($json['format'] ?? null) !== self::BRANCH_SET_FORMAT || ($json['version'] ?? null) !== self::BRANCH_SET_VERSION
-            || !is_string($json['name'] ?? null) || trim($json['name']) === '') {
+        if (!is_array($json) || ($json['format'] ?? null) !== self::BRANCH_SET_FORMAT || ($json['version'] ?? null) !== self::BRANCH_SET_VERSION) {
             return $set;
         }
-        $set['name'] = trim($json['name']);
+        if (is_string($json['name'] ?? null) && trim($json['name']) !== '') {
+            $set['name'] = trim($json['name']);
+        }
         $set['saved'] = is_string($json['saved'] ?? null) ? $json['saved'] : '';
         foreach (self::BRANCH_LISTS as $list) {
             $entries = $json[$list] ?? array();
@@ -914,310 +850,10 @@ trait ExportFamilyBookBranches
     }
 
     /**
-     * Save the current selection of both lists as a set
-     *
-     * @throws FilesystemException
-     * @throws JsonException
-     */
-    private function writeBranchSet(Tree $tree, string $id, string $name): void
-    {
-        $json = array(
-            'format' => self::BRANCH_SET_FORMAT,
-            'version' => self::BRANCH_SET_VERSION,
-            'name' => $name,
-            'saved' => date('Y-m-d H:i:s'),
-        );
-        foreach (self::BRANCH_LISTS as $list) {
-            $entries = array();
-            foreach ($this->branchStates($this->parseSeedList($this->currentSeedList($tree, $list))['items']) as $key => $state) {
-                $entries[] = array('start' => explode('#', $key)[0], 'branch' => $state['name'], 'export' => $state['include']);
-            }
-            $json[$list] = $entries;
-        }
-        $this->writeBranchSetFile($tree, $id, $json);
-    }
-
-    /**
-     * Write a set file (and README.txt of the folder)
-     *
-     * @throws FilesystemException
-     * @throws JsonException
-     */
-    private function writeBranchSetFile(Tree $tree, string $id, array $json): void
-    {
-        $data = Registry::filesystem()->data();
-        $folder = $this->treeBaseFolder($tree) . '/' . self::BRANCH_SETS_FOLDER;
-        $data->createDirectory($folder);
-        $data->write($folder . '/' . $id . '.json', json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
-        if (!$data->fileExists($folder . '/README.txt')) {
-            $data->write($folder . '/README.txt', $this->branchSetsReadme());
-        }
-    }
-
-    /**
-     * ID (file name) of a set name, null if the name is invalid
-     *
-     * @param string $name trimmed name
-     * @param array $sets existing sets
-     * @param string|null $except ID of the set that is renamed
-     * @param bool $overwrite true: the name of an existing set is allowed (the set is updated)
-     * @return string|null
-     */
-    private function branchSetIdForName(string $name, array $sets, ?string $except, bool $overwrite): ?string
-    {
-        if ($this->branchSetNameError($name, $sets, $except, $overwrite) !== '') {
-            return null;
-        }
-        foreach ($sets as $id => $set) {
-            if (mb_strtolower($set['name']) === mb_strtolower($name) && $id !== $except) {
-                return $id;
-            }
-        }
-
-        // only letters, digits, '_' and '-' (see treeFolderName): the name can never leave the folder
-        return $this->treeFolderName($name);
-    }
-
-    /**
-     * Error message for a set name ('' if the name is valid)
-     */
-    private function branchSetNameError(string $name, array $sets, ?string $except, bool $overwrite): string
-    {
-        if ($name === '') {
-            return I18N::translate('Please enter a name for the set.');
-        }
-        if (mb_strlen($name) > self::BRANCH_SET_NAME_LENGTH || preg_match('/\p{C}/u', $name) !== 0) {
-            return I18N::translate('The name of a set may have up to %s characters and no control characters.', I18N::number(self::BRANCH_SET_NAME_LENGTH));
-        }
-        foreach ($sets as $id => $set) {
-            if ($id === $except) {
-                continue;
-            }
-            $same_name = mb_strtolower($set['name']) === mb_strtolower($name);
-            if (($same_name && !$overwrite) || (!$same_name && $id === $this->treeFolderName($name))) {
-                return I18N::translate('A set with the name “%s” already exists.', $set['name']);
-            }
-        }
-
-        return '';
-    }
-
-    /**
-     * The set applied or saved last, if it still exists
-     */
-    private function readActiveBranchSet(Tree $tree, array $sets): ?string
-    {
-        $data = Registry::filesystem()->data();
-        $file = $this->treeBaseFolder($tree) . '/' . self::BRANCH_SET_ACTIVE_FILE;
-        if (!$data->fileExists($file)) {
-            return null;
-        }
-        $id = trim($data->read($file));
-
-        return array_key_exists($id, $sets) && !$sets[$id]['broken'] ? $id : null;
-    }
-
-    /**
-     * Remember the active set (null: none)
-     *
-     * @throws FilesystemException
-     */
-    private function writeActiveBranchSet(Tree $tree, ?string $id): void
-    {
-        $data = Registry::filesystem()->data();
-        $file = $this->treeBaseFolder($tree) . '/' . self::BRANCH_SET_ACTIVE_FILE;
-        if ($id === null) {
-            if ($data->fileExists($file)) {
-                $data->delete($file);
-            }
-        } else {
-            $data->createDirectory($this->treeBaseFolder($tree));
-            $data->write($file, $id . "\n");
-        }
-    }
-
-    /**
-     * Compare a list with a set
-     *
-     * @param array $set
-     * @param string $list
-     * @param array<string,array{name: string, include: bool}> $states see branchStates()
-     * @return array{differ: array<string>, new: array<string>, new_keys: array<string>, missing: int}
-     *         names of the branches with another state, names and keys of the branches that are not in the set,
-     *         number of branches of the set that are no longer in the list
-     */
-    private function compareBranchSet(array $set, string $list, array $states): array
-    {
-        $result = array('differ' => array(), 'new' => array(), 'new_keys' => array(), 'missing' => 0);
-        $entries = $set['lists'][$list] ?? array();
-        foreach ($states as $key => $state) {
-            if (!array_key_exists($key, $entries)) {
-                $result['new'][] = $state['name'];
-                $result['new_keys'][] = (string) $key;
-            } elseif ($entries[$key]['include'] !== $state['include']) {
-                $result['differ'][] = $state['name'];
-            }
-        }
-        $result['missing'] = count(array_diff_key($entries, $states));
-
-        return $result;
-    }
-
-    /**
-     * Apply a set: switch the branches on or off as stored in the set
-     *
-     * Branches that are not in the set (added later) are switched on. Entries of the set
-     * for branches that no longer exist are ignored.
-     *
-     * @param Tree $tree
-     * @param string $list the list of the page
-     * @param string $id
-     * @param bool $both true: apply to both lists, false: only to the list of the page
-     * @throws FilesystemException
-     * @throws JsonException
-     */
-    private function applyBranchSetForm(Tree $tree, string $list, string $id, bool $both): void
-    {
-        $sets = $this->readBranchSets($tree);
-        if (!array_key_exists($id, $sets) || $sets[$id]['broken']) {
-            FlashMessages::addMessage(e(I18N::translate('The set does not exist or cannot be read.')), 'danger');
-            return;
-        }
-        $set = $sets[$id];
-        $messages = array();
-        foreach ($both ? self::BRANCH_LISTS : array($list) as $type) {
-            $current = $this->currentSeedList($tree, $type);
-            $parsed = $this->parseSeedList($current);
-            if (!$parsed['valid']) {
-                $messages[] = I18N::translate('%s: the list of branches cannot be changed on this page because it does not start with two separators.', $this->branchListTitle($type));
-                continue;
-            }
-            $compare = $this->compareBranchSet($set, $type, $this->branchStates($parsed['items']));
-            $entries = $set['lists'][$type];
-            $lines = array();
-            foreach ($parsed['items'] as $index => $item) {
-                if ($item['type'] !== 'branch') {
-                    $lines[] = $item['line'];
-                    continue;
-                }
-                $key = $this->branchRowKey($parsed['items'], $index);
-                $include = array_key_exists($key, $entries) ? $entries[$key]['include'] : true;
-                $lines[] = ($include === $item['include'])
-                    ? $item['line']
-                    : $this->seedLine(array_merge($item, array('include' => $include)), $parsed['sep1'], $parsed['sep2']);
-            }
-            $this->saveSeedList($tree, $type, $this->serializeSeedList($parsed, $lines), $current);
-            if ($compare['new'] !== array()) {
-                $messages[] = I18N::translate('%1$s: these branches are not in the set and have been switched on: %2$s', $this->branchListTitle($type), implode(', ', $compare['new']));
-            }
-            if ($compare['missing'] > 0) {
-                $messages[] = I18N::plural(
-                    '%1$s: %2$s branch of the set no longer exists.',
-                    '%1$s: %2$s branches of the set no longer exist.',
-                    $compare['missing'],
-                    $this->branchListTitle($type),
-                    I18N::number($compare['missing'])
-                );
-            }
-        }
-        $this->writeActiveBranchSet($tree, $id);
-        FlashMessages::addMessage(e($both
-            ? I18N::translate('The set “%s” has been applied to the book and the chart.', $set['name'])
-            : I18N::translate('The set “%1$s” has been applied to %2$s.', $set['name'], $this->branchListTitle($list))), 'success');
-        foreach ($messages as $message) {
-            FlashMessages::addMessage(e($message), 'info');
-        }
-    }
-
-    /**
-     * Rename a set (the file gets the new name, too)
-     *
-     * @throws FilesystemException
-     * @throws JsonException
-     */
-    private function renameBranchSet(Tree $tree, string $id, string $name): void
-    {
-        $sets = $this->readBranchSets($tree);
-        $name = trim($name);
-        if (!array_key_exists($id, $sets) || $sets[$id]['broken']) {
-            FlashMessages::addMessage(e(I18N::translate('The set does not exist or cannot be read.')), 'danger');
-            return;
-        }
-        $new_id = $this->branchSetIdForName($name, $sets, $id, false);
-        if ($new_id === null) {
-            FlashMessages::addMessage(e($this->branchSetNameError($name, $sets, $id, false)), 'danger');
-            return;
-        }
-        $data = Registry::filesystem()->data();
-        $folder = $this->treeBaseFolder($tree) . '/' . self::BRANCH_SETS_FOLDER;
-        $json = json_decode($data->read($folder . '/' . $id . '.json'), true, 16, JSON_THROW_ON_ERROR);
-        $json['name'] = $name;
-        $this->writeBranchSetFile($tree, $new_id, $json);
-        if ($new_id !== $id) {
-            $data->delete($folder . '/' . $id . '.json');
-            if ($this->readActiveBranchSet($tree, $sets) === $id) {
-                $this->writeActiveBranchSet($tree, $new_id);
-            }
-        }
-        FlashMessages::addMessage(e(I18N::translate('The set “%1$s” has been renamed to “%2$s”.', $sets[$id]['name'], $name)), 'success');
-    }
-
-    /**
-     * Delete a set
-     *
-     * @throws FilesystemException
-     */
-    private function deleteBranchSet(Tree $tree, string $id): void
-    {
-        $sets = $this->readBranchSets($tree);
-        if (!array_key_exists($id, $sets)) {
-            FlashMessages::addMessage(e(I18N::translate('The set does not exist or cannot be read.')), 'danger');
-            return;
-        }
-        if ($this->readActiveBranchSet($tree, $sets) === $id) {
-            $this->writeActiveBranchSet($tree, null);
-        }
-        Registry::filesystem()->data()->delete($this->treeBaseFolder($tree) . '/' . self::BRANCH_SETS_FOLDER . '/' . $id . '.json');
-        FlashMessages::addMessage(e(I18N::translate('The set “%s” has been deleted.', $sets[$id]['name'])), 'success');
-    }
-
-    /**
      * Short title of a list for messages
      */
     private function branchListTitle(string $list): string
     {
         return $this->pageTitle($list);
-    }
-
-    /**
-     * Text of README.txt in the folder of the sets
-     */
-    private function branchSetsReadme(): string
-    {
-        return implode("\n", array(
-            'ExportFamilyBook: sets of branches of this family tree',
-            '',
-            'The page "Branches and sets" of the module writes these files. One file per set (UTF-8, JSON).',
-            'A set remembers which branches are exported, separately for the book (latex) and the chart (graphml):',
-            '',
-            '{',
-            '    "format": "' . self::BRANCH_SET_FORMAT . '",',
-            '    "version": ' . self::BRANCH_SET_VERSION . ',',
-            '    "name": "Book for ...",',
-            '    "saved": "2026-01-31 12:00:00",',
-            '    "latex": [',
-            '        { "start": "I1", "branch": "Name of the branch", "export": true },',
-            '        { "start": "I2", "branch": "Another branch", "export": false }',
-            '    ],',
-            '    "graphml": [ ... ]',
-            '}',
-            '',
-            'A branch is identified by its start individual ("start"). "branch" is only for reading.',
-            'If an individual starts several branches, the entries are matched in their order.',
-            'Applying a set writes column 7 (include/exclude) of branch_seeds.txt in ../latex and ../graphml.',
-            'Branches that are not in the set are switched on; entries for branches that no longer exist are ignored.',
-            'The file name is derived from the name of the set. ../' . self::BRANCH_SET_ACTIVE_FILE . ' contains the',
-            'file name (without .json) of the set applied or saved last.',
-        )) . "\n";
     }
 }

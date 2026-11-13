@@ -1,0 +1,84 @@
+<?php
+
+/**
+ * Profile bar at the top of the pages of the module: shows the active profile, switches profiles,
+ * and (managers only) copies, renames and deletes the active profile
+ *
+ * @var array $profile see ExportFamilyBookProfiles::profileBarData()
+ */
+
+use Fisharebest\Webtrees\I18N;
+
+$active = $profile['active'];
+$standard = ($active === '');
+?>
+<section class="card mb-3 border-primary" id="efb-profile">
+    <div class="card-body py-2">
+        <form method="post" action="<?= e($profile['profiles_url']) ?>" class="row g-2 align-items-center" id="efb-profile-select">
+            <?= csrf_field() ?>
+            <input type="hidden" name="return" value="<?= e($profile['page']) ?>">
+            <input type="hidden" name="list" value="<?= e($profile['list']) ?>">
+            <input type="hidden" name="xref" value="<?= e($profile['xref']) ?>">
+            <div class="col-auto">
+                <label class="fw-bold" for="efb-profile-id"><?= e(I18N::translate('Book profile')) ?>:</label>
+            </div>
+            <div class="col-auto">
+                <select class="form-select form-select-sm" name="profile_id" id="efb-profile-id">
+                    <?php foreach ($profile['options'] as $id => $label) : ?>
+                        <option value="<?= e((string) $id) ?>" <?= (string) $id === $active ? 'selected' : '' ?>><?= e($label) ?></option>
+                    <?php endforeach ?>
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-sm btn-primary" name="mod_action" value="select_profile"><?= e(I18N::translate('Switch')) ?></button>
+            </div>
+            <div class="col-auto">
+                <?= e(I18N::translate('Active profile:')) ?> <strong id="efb-profile-active"><?= e($profile['active_name']) ?></strong>
+            </div>
+        </form>
+
+        <p class="small text-muted mb-1 mt-1">
+            <?php if ($standard) : ?>
+                <?= e(I18N::translate('The profile Standard contains the common settings of all profiles.')) ?>
+            <?php else : ?>
+                <?= e(I18N::translate('This profile has its own reference individual, selection of branches and these settings: %s. All other settings are common to all profiles.', $profile['own_fields'] === [] ? '–' : implode(', ', array_unique($profile['own_fields'])))) ?>
+                <?php if ($profile['reference'] !== null) : ?>
+                    <?= e(I18N::translate('Reference individual: %s', $profile['reference'])) ?>
+                <?php endif ?>
+            <?php endif ?>
+        </p>
+
+        <?php if ($profile['can_manage']) : ?>
+            <details>
+                <summary class="small"><?= e(I18N::translate('Manage profiles')) ?></summary>
+                <form method="post" action="<?= e($profile['profiles_url']) ?>" class="row g-2 align-items-center mt-1" id="efb-profile-manage">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="return" value="<?= e($profile['page']) ?>">
+                    <input type="hidden" name="list" value="<?= e($profile['list']) ?>">
+                    <input type="hidden" name="xref" value="<?= e($profile['xref']) ?>">
+                    <input type="hidden" name="profile_id" value="<?= e($active) ?>">
+                    <div class="col-auto">
+                        <label class="visually-hidden" for="efb-profile-name"><?= e(I18N::translate('Name of the profile')) ?></label>
+                        <input type="text" class="form-control form-control-sm" name="new_name" id="efb-profile-name" maxlength="80"
+                               placeholder="<?= e(I18N::translate('New name, e.g. Book for …')) ?>">
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-sm btn-secondary" name="mod_action" value="copy_profile"><?= e(I18N::translate('Copy “%s” under this name', $profile['active_name'])) ?></button>
+                        <?php if (!$standard) : ?>
+                            <button type="submit" class="btn btn-sm btn-secondary" name="mod_action" value="rename_profile"><?= e(I18N::translate('Rename “%s”', $profile['active_name'])) ?></button>
+                            <button type="submit" class="btn btn-sm btn-outline-danger" name="mod_action" value="delete_profile"
+                                    data-confirm="<?= e(I18N::translate('Delete the profile “%s”? Its own settings are lost; the common settings stay.', $profile['active_name'])) ?>"
+                                    onclick="return window.confirm(this.dataset.confirm);"><?= e(I18N::translate('Delete “%s”', $profile['active_name'])) ?></button>
+                        <?php endif ?>
+                    </div>
+                    <div class="col-12 small text-muted">
+                        <?= e(I18N::translate('A copy gets the saved state of the active profile. To keep unsaved changes of the export form, use “Save as new profile” there.')) ?>
+                        <?php if ($standard) : ?>
+                            <?= e(I18N::translate('The profile Standard cannot be renamed or deleted.')) ?>
+                        <?php endif ?>
+                    </div>
+                </form>
+            </details>
+        <?php endif ?>
+    </div>
+</section>

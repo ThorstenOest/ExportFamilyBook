@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Page "Branches": the list of branch seeds as a table, and named sets
+ * Page "Branches": the list of branch seeds of the active profile as a table
  *
  * @var string $title
  * @var \Fisharebest\Webtrees\Tree $tree
@@ -15,8 +15,8 @@
  * @var array<string,array{label: string, url: string}> $people
  * @var string $base hash of the list, to recognize changes in the meantime
  * @var array{h5: string, h6: string} $headings default headings of the book
- * @var array<int,array{id: string, name: string, saved: string, broken: bool}> $sets
- * @var array|null $active the active set
+ * @var array $profile see ExportFamilyBookProfiles::profileBarData()
+ * @var string $module_name
  * @var string $form_url
  * @var array<string,string> $tab_urls
  * @var array<string,string> $page_urls
@@ -59,20 +59,14 @@ $i18n = array(
     'empty_line' => I18N::translate('empty line'),
     'kept' => I18N::translate('This line is kept as it is. Edit it in the text field of the export page.'),
     'new_row' => I18N::translate('new'),
-    'not_in_set' => I18N::translate('not in the set'),
-    'not_in_set_title' => I18N::translate('This branch is not in the active set. It was switched on when the set was applied.'),
+    'not_in_set' => I18N::translate('not in the profile'),
+    'not_in_set_title' => I18N::translate('This branch has been added after the profile was saved. It is exported as in the profile Standard until you save the profile.'),
     'heading_branch' => I18N::translate('Heading of the branch'),
     'heading_generation' => I18N::translate('Heading per generation'),
     'name' => I18N::translate('Name of the branch'),
     'direction' => I18N::translate('Direction'),
     'delete_line' => I18N::translate('Delete this line? It is not a branch that this page can show.'),
     'unsaved' => I18N::translate('There are unsaved changes.'),
-    'unsaved_apply' => I18N::translate('There are unsaved changes. They are lost when you apply a set. Continue?'),
-    'set_name_missing' => I18N::translate('Please enter a name for the set.'),
-    'set_overwrite' => I18N::translate('The set “%s” already exists. Overwrite it with the current selection?', '%s'),
-    'set_rename' => I18N::translate('New name of the set “%s”:', '%s'),
-    'set_delete' => I18N::translate('Delete the set “%s”?', '%s'),
-    'none_selected' => I18N::translate('Please select a set.'),
     'start_missing' => I18N::translate('Please select the start individual.'),
 );
 ?>
@@ -110,8 +104,10 @@ $i18n = array(
     </p>
     <p>
         <?= e(I18N::translate('Each row is a branch. The order of the rows is the order of the branches in the book. Remove the tick “Exported” to leave the individuals of a branch out.')) ?>
-        <?= e(I18N::translate('A set remembers which branches are exported, e.g. for a book for one relative. You can switch between sets.')) ?>
+        <?= e(I18N::translate('The branches themselves (start and stop individuals, names, order) are common to all profiles. Which branches are exported belongs to the active profile.')) ?>
     </p>
+
+    <?= view($module_name . '::profile_bar', ['profile' => $profile]) ?>
 
     <ul class="nav nav-tabs mb-2">
         <li class="nav-item">
@@ -122,7 +118,7 @@ $i18n = array(
         </li>
     </ul>
     <p class="text-muted small">
-        <?= e(I18N::translate('The book and the chart have lists of their own. A set remembers the selection of both lists and is applied to both unless you choose otherwise.')) ?>
+        <?= e(I18N::translate('The book and the chart have lists of their own.')) ?>
     </p>
 
     <?php if (!$can_save) : ?>
@@ -136,69 +132,12 @@ $i18n = array(
         <pre class="border p-2"><?= e($raw_value) ?></pre>
     <?php else : ?>
 
-    <section class="card mb-3">
-        <div class="card-body">
-            <h2 class="h5"><?= e(I18N::translate('Sets')) ?></h2>
-            <p id="efb-active">
-                <?php if ($active === null) : ?>
-                    <?= e(I18N::translate('No set is active.')) ?>
-                <?php else : ?>
-                    <?= e(I18N::translate('Active set:')) ?> <strong><?= e($active['name']) ?></strong>
-                    <?php if ($active['differ'] === 0 && $active['new'] === 0) : ?>
-                        <span class="badge bg-success"><?= e(I18N::translate('The branches match the set.')) ?></span>
-                    <?php endif ?>
-                    <?php if ($active['differ'] > 0) : ?>
-                        <span class="badge bg-warning text-dark" title="<?= e(implode(', ', $active['differ_here'])) ?>">
-                            <?= e(I18N::plural('%s branch differs from the set.', '%s branches differ from the set.', $active['differ'], I18N::number($active['differ']))) ?>
-                        </span>
-                    <?php endif ?>
-                    <?php if ($active['new'] > 0) : ?>
-                        <span class="badge bg-info text-dark" title="<?= e(implode(', ', $active['new_here'])) ?>">
-                            <?= e(I18N::plural('%s branch is not in the set.', '%s branches are not in the set.', $active['new'], I18N::number($active['new']))) ?>
-                        </span>
-                    <?php endif ?>
-                    <br><span class="small text-muted"><?= e(I18N::translate('Compared with the saved lists of the book and the chart. Save the set again to include changes.')) ?></span>
-                <?php endif ?>
-            </p>
-
-            <?php if ($sets === []) : ?>
-                <p class="mb-0"><?= e(I18N::translate('There are no sets yet. Use “Save as set” below the table.')) ?></p>
-            <?php else : ?>
-                <form method="post" action="<?= e($form_url) ?>" id="efb-set-form" class="row g-2 align-items-center">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="list" value="<?= e($list) ?>">
-                    <input type="hidden" name="new_name" id="efb-new-name" value="">
-                    <div class="col-auto">
-                        <label class="visually-hidden" for="efb-set-id"><?= e(I18N::translate('Set')) ?></label>
-                        <select class="form-select form-select-sm" name="set_id" id="efb-set-id" <?= $disabled ?>>
-                            <?php foreach ($sets as $set) : ?>
-                                <option value="<?= e($set['id']) ?>" data-name="<?= e($set['name']) ?>" <?= ($active !== null && $active['id'] === $set['id']) ? 'selected' : '' ?>>
-                                    <?= e($set['broken'] ? I18N::translate('%s (cannot be read)', $set['name']) : $set['name']) ?>
-                                </option>
-                            <?php endforeach ?>
-                        </select>
-                    </div>
-                    <div class="col-auto">
-                        <div class="form-check mb-0">
-                            <input class="form-check-input" type="checkbox" name="apply_both" value="1" id="efb-apply-both" checked <?= $disabled ?>>
-                            <label class="form-check-label" for="efb-apply-both"><?= e(I18N::translate('Apply to the book and the chart')) ?></label>
-                        </div>
-                    </div>
-                    <div class="col-auto">
-                        <button type="submit" class="btn btn-sm btn-primary" name="mod_action" value="apply_set" <?= $disabled ?>><?= e(I18N::translate('Apply set')) ?></button>
-                        <button type="submit" class="btn btn-sm btn-secondary" name="mod_action" value="rename_set" <?= $disabled ?>><?= e(I18N::translate('Rename')) ?></button>
-                        <button type="submit" class="btn btn-sm btn-outline-danger" name="mod_action" value="delete_set" <?= $disabled ?>><?= e(I18N::translate('Delete')) ?></button>
-                    </div>
-                </form>
-            <?php endif ?>
-        </div>
-    </section>
-
     <form method="post" action="<?= e($form_url) ?>" id="efb-form">
         <?= csrf_field() ?>
         <input type="hidden" name="list" value="<?= e($list) ?>">
         <input type="hidden" name="base" value="<?= e($base) ?>">
         <input type="hidden" name="rows" id="efb-rows" value="">
+        <input type="hidden" name="profile" value="<?= e($profile['active']) ?>">
 
         <?php if ($latex) : ?>
             <details class="mb-2">
@@ -264,22 +203,6 @@ $i18n = array(
             <div class="col-auto">
                 <button type="submit" class="btn btn-primary" name="mod_action" value="save_branches" <?= $disabled ?>><?= e(I18N::translate('Save')) ?></button>
             </div>
-            <div class="col-auto">
-                <label class="visually-hidden" for="efb-set-name"><?= e(I18N::translate('Name of the set')) ?></label>
-                <input type="text" class="form-control" name="set_name" id="efb-set-name" list="efb-set-names" maxlength="80"
-                       placeholder="<?= e(I18N::translate('Name of the set, e.g. Book for …')) ?>" value="<?= e($active['name'] ?? '') ?>" <?= $disabled ?>>
-                <datalist id="efb-set-names">
-                    <?php foreach ($sets as $set) : ?>
-                        <option value="<?= e($set['name']) ?>"></option>
-                    <?php endforeach ?>
-                </datalist>
-            </div>
-            <div class="col-auto">
-                <button type="submit" class="btn btn-secondary" name="mod_action" value="save_set" <?= $disabled ?>><?= e(I18N::translate('Save as set')) ?></button>
-            </div>
-            <div class="col-12 small text-muted">
-                <?= e(I18N::translate('“Save as set” saves the table and remembers which branches of the book and of the chart are exported.')) ?>
-            </div>
         </div>
     </form>
     <?php endif ?>
@@ -292,7 +215,6 @@ $i18n = array(
     const I18N = <?= $json($i18n) ?>;
     const ROWS = <?= $json($rows) ?>;
     const PEOPLE = <?= $json((object) $people) ?>;
-    const SETS = <?= $json(array_values(array_map(static fn (array $set): string => $set['name'], $sets))) ?>;
     const CAN_SAVE = <?= $can_save ? 'true' : 'false' ?>;
     const SEARCH_URL = <?= $json($search_url) ?>;
     const root = document.getElementById('efb-branches');
@@ -659,54 +581,9 @@ $i18n = array(
     }
 
     form.addEventListener('submit', function (event) {
-        if (event.submitter && event.submitter.value === 'save_set') {
-            const name = document.getElementById('efb-set-name').value.trim();
-            if (name === '') {
-                window.alert(I18N.set_name_missing);
-                event.preventDefault();
-                return;
-            }
-            const existing = SETS.find(function (set) { return set.toLowerCase() === name.toLowerCase(); });
-            if (existing !== undefined && !window.confirm(format(I18N.set_overwrite, existing))) {
-                event.preventDefault();
-                return;
-            }
-        }
         document.getElementById('efb-rows').value = JSON.stringify(serialize());
         submitting = true;
     });
-
-    const setForm = document.getElementById('efb-set-form');
-    if (setForm) {
-        setForm.addEventListener('submit', function (event) {
-            const select = document.getElementById('efb-set-id');
-            const option = select.options[select.selectedIndex];
-            if (!option) {
-                window.alert(I18N.none_selected);
-                event.preventDefault();
-                return;
-            }
-            const name = option.dataset.name;
-            const action = event.submitter ? event.submitter.value : '';
-            if (action === 'apply_set' && isDirty() && !window.confirm(I18N.unsaved_apply)) {
-                event.preventDefault();
-                return;
-            }
-            if (action === 'rename_set') {
-                const newName = window.prompt(format(I18N.set_rename, name), name);
-                if (newName === null || newName.trim() === '' || newName.trim() === name) {
-                    event.preventDefault();
-                    return;
-                }
-                document.getElementById('efb-new-name').value = newName.trim();
-            }
-            if (action === 'delete_set' && !window.confirm(format(I18N.set_delete, name))) {
-                event.preventDefault();
-                return;
-            }
-            submitting = true;
-        });
-    }
 
     window.addEventListener('beforeunload', function (event) {
         if (!submitting && isDirty()) {
