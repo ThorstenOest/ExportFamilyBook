@@ -360,19 +360,26 @@ pictures is needed on the computer that runs yEd. Tested with yEd 3.25.1 (JPEG a
 |---|---|---|
 | width | width of the picture in pixels; yEd shows it in this size | `100` |
 | position | `top` (picture above the text) or `left` (picture left of the text) | `top` |
-| type | `jpg` (quality 85) or `png` (larger files) | `jpg` |
-| sharpness | `1` to `4`: the picture is stored with this many times the pixels of the width (other values: the default) | `2` |
+| type | `jpg` (quality 92) or `png` (lossless, larger files) | `jpg` |
+| sharpness | `1` to `10`: the picture is stored with this many times the pixels of the width (other values: the default) | `2` |
 
-- The portrait is the highlighted image of the individual in webtrees. webtrees reduces it like the thumbnails
-  of its web pages (and keeps the reduced pictures in its cache, so the next export is faster). A picture
-  higher than 1.5 times its width is reduced to this height.
+- The portrait is the highlighted image of the individual in webtrees. The module reduces the original file
+  (turned as given by its EXIF orientation) and encodes it once, JPEG with quality 92 or lossless PNG.
+  A picture higher than 1.5 times its width is reduced to this height.
+- The reduced pictures are kept in the cache of webtrees (`data/cache/`, like the thumbnails of the web
+  pages), so the next export is faster. A changed file (time of change or size) gives a new picture.
+- If webtrees shows the pictures with a watermark for the user who exports, the module uses the
+  watermarked thumbnails of webtrees instead (encoded again, so with somewhat lower quality).
 - Only pictures the user may see in webtrees are embedded. Individuals without portrait, with a missing or
   unreadable file or with an external picture (a web address) get no picture; there is no silhouette.
 - Sharpness: with `2` a picture shown 100 pixels wide is stored 200 pixels wide and shown in half its size,
   so it stays sharp when zooming in yEd and in a printed or PDF chart. The size in the box and the size of
   the box are the same for every sharpness. A picture is never enlarged beyond its original: an original
-  narrower than width × sharpness is stored in its own size and scaled to the width. `1` gives the output
-  of earlier versions.
+  narrower than width × sharpness is stored in its own size and scaled to the width, so a small original
+  limits the sharpness. An original smaller than the shown size is enlarged to it, as before.
+- A small picture left of the text needs a high sharpness, e.g. `@PortraitIcon&30&left&jpg&8@`: shown 30 pixels
+  wide, stored 240 pixels wide. The size of the file depends on width × sharpness (the stored pixels), not on
+  the sharpness alone; see the sizes measured below.
 - A picture used by several boxes is embedded only once.
 - The placeholder returns no text, its place in the template does not matter. In the LaTeX export it returns
   nothing.
@@ -386,10 +393,27 @@ pictures is needed on the computer that runs yEd. Tested with yEd 3.25.1 (JPEG a
   For this the export adds the name spaces of yEd (`xmlns:yed` and others) to the start of the file. This is
   done by the module, also for templates saved with an older version; the templates need no change.
 
-Size of the file: in a test with 538 different portraits shown 100 pixels wide (JPEG), the file grew by
-3.1 MB with sharpness 1 (about 5.7 KB per picture), 7.1 MB with sharpness 2 (about 13 KB) and 11.5 MB with
-sharpness 3 (about 21 KB). For very large charts, `1` keeps the file small.
-The first export takes longer, because webtrees creates the reduced pictures.
+Size of the file: in a test with 538 different portraits shown 100 pixels wide (JPEG, quality 92), the file
+grew by
+
+| sharpness | growth of the file | per picture |
+|---|---|---|
+| 1 | 4.3 MB | about 8 KB |
+| 2 | 10.3 MB | about 19 KB |
+| 3 | 17.0 MB | about 32 KB |
+| 4 | 23.6 MB | about 44 KB |
+
+Pictures shown 30 pixels wide left of the text (`@PortraitIcon&30&left&jpg&...@`, same test):
+
+| sharpness | stored width | growth of the file | per picture |
+|---|---|---|---|
+| 4 | 120 pixels | 5.2 MB | about 10 KB |
+| 8 | 240 pixels | 12.9 MB | about 24 KB |
+| 10 | 300 pixels | 17.0 MB | about 32 KB |
+
+For very large charts, `1` keeps the file small. In this test the first export took 14 to 23 seconds
+(the module reduces the originals), the next one 8 to 9 seconds (pictures from the cache; the same export
+without pictures: about 9 seconds).
 
 How to change an existing template that uses picture files:
 

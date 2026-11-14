@@ -523,20 +523,24 @@ class ExportFamilyBookData extends AbstractModule
      *
      * yEd shows no "data:" pictures in HTML labels and keeps no paths of pictures; it stores pictures
      * as resources of the file and refers to them with iconData="..." in the node label (structure as
-     * written by yEd 3.25.1, see graphmlFooter). The picture is reduced by webtrees (as for the
-     * thumbnails of the web pages, incl. its cache and watermark rules) and stored as JPEG.
+     * written by yEd 3.25.1, see graphmlFooter).
+     *
+     * The picture is made from the original file (EXIF orientation applied) and encoded once (JPEG
+     * quality 92 or lossless PNG); the result is kept in the file cache of webtrees (data/cache/).
+     * If webtrees adds a watermark for the current user, the picture is made from the watermarked
+     * thumbnail of webtrees instead (see watermarkedPortrait).
      *
      * Format: @PortraitIcon&width&position&type&sharpness@
      *   width      width in pixels (default 100); yEd shows the icon in this size
      *   position   "top" (default: picture above the text) or "left" (picture left of the text)
-     *   type       "jpg" (default, quality 85) or "png"
-     *   sharpness  1 to 4 (default 2; other values: default): the picture is stored with sharpness times
+     *   type       "jpg" (default, quality 92) or "png"
+     *   sharpness  1 to 10 (default 2; other values: default): the picture is stored with sharpness times
      *              the pixels and shown in the same size (yed:ScaledIcon with the scale 1/sharpness), so it
      *              stays sharp when zooming or printing. It is never enlarged beyond the original: a smaller
      *              original is stored in its own size and scaled to the shown size.
      *
      * Nothing is embedded if the individual has no highlighted image, if the current user may not see
-     * the media object, or if the file is missing or cannot be read.
+     * the media object, or if the file is missing, cannot be read or has an unsupported format.
      *
      * @param Individual $record
      * @param array $format
@@ -551,7 +555,7 @@ class ExportFamilyBookData extends AbstractModule
         $position = $this->get_format($format, 1) === "left" ? "left" : "top";
         $png = strtolower($this->get_format($format, 2)) === "png";
         $sharpness = trim($this->get_format($format, 3));
-        $sharpness = preg_match('/^[1-4]$/', $sharpness) === 1 ? (int) $sharpness : 2;
+        $sharpness = preg_match('/^([1-9]|10)$/', $sharpness) === 1 ? (int) $sharpness : 2;
 
         $media_file = $record->findHighlightedMediaFile();
         if ($media_file === null || $media_file->isExternal() || !$media_file->media()->canShow()) {
@@ -564,34 +568,13 @@ class ExportFamilyBookData extends AbstractModule
             try {
                 // shown size: a portrait higher than 1.5 times its width is reduced to this height
                 $height = (int) round($width * 1.5);
-                $shown = $this->portraitThumbnail($media_file, $width, $height);
-                if ($shown !== null) {
-                    $stored = $shown;
-                    $scale = 1.0;
-                    $original = $sharpness > 1 ? $this->originalImageSize($media_file) : null;
-                    // only an original larger than the shown size gives more pixels
-                    if ($original !== null && ($original[0] > imagesx($shown) || $original[1] > imagesy($shown))) {
-                        $fit = min($width / $original[0], $height / $original[1]);
-                        if ($fit * $sharpness >= 1) {
-                            // never enlarged: the original in its own size, scaled to the shown size
-                            $stored = $this->portraitThumbnail($media_file, $original[0], $original[1]);
-                            $scale = $fit;
-                        } else {
-                            $stored = $this->portraitThumbnail($media_file, $width * $sharpness, (int) round($width * $sharpness * 1.5));
-                            $scale = 1 / $sharpness;
-                        }
-                        if ($stored === null) {
-                            $stored = $shown;
-                            $scale = 1.0;
-                        }
-                    }
-                    $w = imagesx($shown);
-                    $h = imagesy($shown);
-                    ob_start();
-                    $png ? imagepng($stored, null, 9) : imagejpeg($stored, null, 85);
-                    $encoded = (string) ob_get_clean();
+                $picture = Registry::imageFactory()->thumbnailNeedsWatermark($media_file, Auth::user())
+                    ? $this->watermarkedPortrait($media_file, $width, $height, $sharpness, $png)
+                    : $this->originalPortrait($media_file, $width, $height, $sharpness, $png);
+                if (is_array($picture)) {
+                    list($encoded, $pixel_width, $pixel_height, $w, $h, $scale) = $picture;
                     $number = count($this->icon_resources) + 1;
-                    $this->icon_resources[$number] = array(base64_encode($encoded), imagesx($stored), imagesy($stored), $w, $h, $scale);
+                    $this->icon_resources[$number] = array(base64_encode($encoded), $pixel_width, $pixel_height, $w, $h, $scale);
                     $this->icon_cache[$key] = array($this->iconResourceId($number), $w, $h);
                 }
             } catch (Throwable $ex) {
@@ -603,6 +586,158 @@ class ExportFamilyBookData extends AbstractModule
         }
 
         return array($this->icon_cache[$key][0], $this->icon_cache[$key][1], $this->icon_cache[$key][2], $position);
+    }
+
+    // JPEG quality of the embedded portraits; lifetime of their cache entries (as webtrees thumbnails: 100 days)
+    private const PORTRAIT_JPEG_QUALITY = 92;
+    private const PORTRAIT_CACHE_TTL = 8640000;
+
+    /**
+     * Portrait made from the original file, cached in the file cache of webtrees (data/cache/)
+     *
+     * The key contains the file (tree, name, time of change, size), the size rules and the type, so a
+     * changed file or other parameters give a new entry.
+     *
+     * @return array{0: string, 1: int, 2: int, 3: int, 4: int, 5: float}|null
+     *         encoded picture, pixel width, pixel height, shown width, shown height, scale
+     */
+    private function originalPortrait(\Fisharebest\Webtrees\MediaFile $media_file, int $width, int $height, int $sharpness, bool $png): ?array
+    {
+        $filesystem = $media_file->media()->tree()->mediaFilesystem();
+        $path = $media_file->filename();
+        $key = implode('|', array(
+            'ExportFamilyBook-portrait',
+            $media_file->media()->tree()->name(),
+            $path,
+            (string) $filesystem->lastModified($path),
+            (string) $filesystem->fileSize($path),
+            (string) $width,
+            (string) $height,
+            (string) $sharpness,
+            $png ? 'png' : 'jpg' . self::PORTRAIT_JPEG_QUALITY,
+        ));
+
+        $picture = Registry::cache()->file()->remember(
+            $key,
+            fn () => $this->encodePortrait($filesystem->read($path), $width, $height, $sharpness, $png) ?? false,
+            self::PORTRAIT_CACHE_TTL
+        );
+
+        return is_array($picture) ? $picture : null;
+    }
+
+    /**
+     * Reduce a picture to the size rules of @PortraitIcon@ and encode it once
+     *
+     * Shown size: the picture fits into width x height. Stored pixels: sharpness times the shown size,
+     * but never more than the original; an original smaller than the shown size is enlarged to it (as
+     * the thumbnails of webtrees). Transparent parts become white.
+     *
+     * @return array{0: string, 1: int, 2: int, 3: int, 4: int, 5: float}|null see originalPortrait
+     */
+    private function encodePortrait(string $data, int $width, int $height, int $sharpness, bool $png): ?array
+    {
+        $info = @getimagesizefromstring($data);
+        $image = $info === false ? false : @imagecreatefromstring($data);
+        if ($image === false) {
+            return null;
+        }
+        if (($info[2] ?? 0) === IMAGETYPE_JPEG && function_exists('exif_read_data')) {
+            $exif = @exif_read_data('data://image/jpeg;base64,' . base64_encode($data));
+            $image = $this->orientImage($image, is_array($exif) ? (int) ($exif['Orientation'] ?? 1) : 1);
+        }
+        unset($data);
+
+        $original_width = imagesx($image);
+        $original_height = imagesy($image);
+        $fit = min($width / $original_width, $height / $original_height);
+        $w = max(1, (int) round($original_width * $fit));
+        $h = max(1, (int) round($original_height * $fit));
+        if ($fit >= 1) {
+            // original not larger than the shown size: enlarged to it
+            list($pixel_width, $pixel_height, $scale) = array($w, $h, 1.0);
+        } elseif ($fit * $sharpness >= 1) {
+            // never enlarged: the original in its own size, scaled to the shown size
+            list($pixel_width, $pixel_height, $scale) = array($original_width, $original_height, $fit);
+        } else {
+            $pixel_width = max(1, (int) round($original_width * $fit * $sharpness));
+            $pixel_height = max(1, (int) round($original_height * $fit * $sharpness));
+            $scale = 1 / $sharpness;
+        }
+
+        $canvas = imagecreatetruecolor($pixel_width, $pixel_height);
+        imagefill($canvas, 0, 0, imagecolorallocate($canvas, 255, 255, 255));
+        imagecopyresampled($canvas, $image, 0, 0, 0, 0, $pixel_width, $pixel_height, $original_width, $original_height);
+        unset($image);
+        ob_start();
+        $png ? imagepng($canvas, null, 9) : imagejpeg($canvas, null, self::PORTRAIT_JPEG_QUALITY);
+        $encoded = (string) ob_get_clean();
+        unset($canvas);
+
+        return array($encoded, $pixel_width, $pixel_height, $w, $h, $scale);
+    }
+
+    /**
+     * Turn a GD image as given by the EXIF orientation (1 to 8) of the file
+     */
+    private function orientImage(\GdImage $image, int $orientation): \GdImage
+    {
+        // rotation angle (counterclockwise, as imagerotate) and mirroring after the rotation
+        $turns = array(2 => array(0, true), 3 => array(180, false), 4 => array(180, true), 5 => array(270, true),
+            6 => array(270, false), 7 => array(90, true), 8 => array(90, false));
+        if (!isset($turns[$orientation])) {
+            return $image;
+        }
+        list($angle, $mirror) = $turns[$orientation];
+        if ($angle !== 0) {
+            $rotated = imagerotate($image, $angle, 0);
+            if ($rotated === false) {
+                return $image;
+            }
+            $image = $rotated;
+        }
+        if ($mirror) {
+            imageflip($image, IMG_FLIP_HORIZONTAL);
+        }
+
+        return $image;
+    }
+
+    /**
+     * Portrait made from the watermarked thumbnails of webtrees (when webtrees adds a watermark for the
+     * current user): same sizes as originalPortrait, the thumbnail of webtrees is encoded again
+     *
+     * @return array{0: string, 1: int, 2: int, 3: int, 4: int, 5: float}|null see originalPortrait
+     */
+    private function watermarkedPortrait(\Fisharebest\Webtrees\MediaFile $media_file, int $width, int $height, int $sharpness, bool $png): ?array
+    {
+        $shown = $this->portraitThumbnail($media_file, $width, $height);
+        if ($shown === null) {
+            return null;
+        }
+        $stored = $shown;
+        $scale = 1.0;
+        $original = $sharpness > 1 ? $this->originalImageSize($media_file) : null;
+        // only an original larger than the shown size gives more pixels
+        if ($original !== null && ($original[0] > imagesx($shown) || $original[1] > imagesy($shown))) {
+            $fit = min($width / $original[0], $height / $original[1]);
+            if ($fit * $sharpness >= 1) {
+                $stored = $this->portraitThumbnail($media_file, $original[0], $original[1]);
+                $scale = $fit;
+            } else {
+                $stored = $this->portraitThumbnail($media_file, $width * $sharpness, (int) round($width * $sharpness * 1.5));
+                $scale = 1 / $sharpness;
+            }
+            if ($stored === null) {
+                $stored = $shown;
+                $scale = 1.0;
+            }
+        }
+        ob_start();
+        $png ? imagepng($stored, null, 9) : imagejpeg($stored, null, self::PORTRAIT_JPEG_QUALITY);
+        $encoded = (string) ob_get_clean();
+
+        return array($encoded, imagesx($stored), imagesy($stored), imagesx($shown), imagesy($shown), $scale);
     }
 
     /**
@@ -630,6 +765,7 @@ class ExportFamilyBookData extends AbstractModule
         $canvas = imagecreatetruecolor($w, $h);
         imagefill($canvas, 0, 0, imagecolorallocate($canvas, 255, 255, 255));
         imagecopy($canvas, $image, 0, 0, 0, 0, $w, $h);
+        unset($image);
 
         return $canvas;
     }
