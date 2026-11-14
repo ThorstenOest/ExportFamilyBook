@@ -1752,7 +1752,8 @@ class ExportFamilyBookData extends AbstractModule
                             // "IfExists" is the spelling of the help, "IfExist" the one of older templates
                             if (in_array($this->get_format($format, 0), array("IfExist", "IfExists"), true) and  get_class($record) != "Fisharebest\Webtrees\Fact") {
                                 $fact_records = $this->recordFacts($record, (array) $fact_type, true);
-                                if (empty($fact_records)) {
+                                // a collection (webtrees 2), empty() would always be false
+                                if (count($fact_records) === 0) {
                                     $return_value = FALSE;
                                 }
                             }
