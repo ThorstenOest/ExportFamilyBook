@@ -83,6 +83,13 @@ class ExportFamilyBookData extends AbstractModule
     private string $entry_xref = '';
     private bool $entry_has_label = true;
 
+    // GraphML: portraits embedded as label icons (@PortraitIcon@, see portraitIcon)
+    // resources of the file: id => base64 data; cache: key of the picture => [id, width, height]
+    private array $icon_resources = array();
+    private array $icon_cache = array();
+    // icon of the node processed: [id, width, height, position] or null
+    private ?array $node_icon = null;
+
     /**
      * Collect the media that the LaTeX export would include, without creating the book
      *
@@ -504,6 +511,79 @@ class ExportFamilyBookData extends AbstractModule
     }
 
     /**
+     * Embed the portrait of an individual as icon of the node label (GraphML, @PortraitIcon@)
+     *
+     * yEd shows no "data:" pictures in HTML labels and keeps no paths of pictures; it stores pictures
+     * as resources in the file (<y:Resource type="java.awt.image.BufferedImage">, base64) and refers to
+     * them with iconData="..." in the node label. The picture is reduced by webtrees (as for the
+     * thumbnails of the web pages, incl. its cache and watermark rules) and stored as JPEG.
+     *
+     * Format: @PortraitIcon&width&position&type@
+     *   width     width in pixels (default 100); yEd shows the icon in this size
+     *   position  "top" (default: picture above the text) or "left" (picture left of the text)
+     *   type      "jpg" (default, quality 85) or "png"
+     *
+     * Nothing is embedded if the individual has no highlighted image, if the current user may not see
+     * the media object, or if the file is missing or cannot be read.
+     *
+     * @param Individual $record
+     * @param array $format
+     * @return array{0: string, 1: int, 2: int, 3: string}|null resource id, width, height, position
+     */
+    private function portraitIcon(Individual $record, array $format): ?array
+    {
+        $width = (int) $this->get_format($format, 0);
+        if ($width < 1 || $width > 2000) {
+            $width = 100;
+        }
+        $position = $this->get_format($format, 1) === "left" ? "left" : "top";
+        $png = strtolower($this->get_format($format, 2)) === "png";
+
+        $media_file = $record->findHighlightedMediaFile();
+        if ($media_file === null || $media_file->isExternal() || !$media_file->media()->canShow()) {
+            return null;
+        }
+
+        $key = $media_file->media()->xref() . '|' . $media_file->filename() . '|' . $width . '|' . (int) $png;
+        if (!array_key_exists($key, $this->icon_cache)) {
+            $this->icon_cache[$key] = null;
+            try {
+                $factory = Registry::imageFactory();
+                // a portrait higher than 1.5 times its width is reduced to this height
+                $data = $factory->mediaFileThumbnail(
+                    $media_file,
+                    $width,
+                    (int) round($width * 1.5),
+                    'contain',
+                    $factory->thumbnailNeedsWatermark($media_file, Auth::user())
+                );
+                $image = @imagecreatefromstring($data);
+                if ($image !== false) {
+                    $w = imagesx($image);
+                    $h = imagesy($image);
+                    // transparent parts (PNG, GIF) become white
+                    $canvas = imagecreatetruecolor($w, $h);
+                    imagefill($canvas, 0, 0, imagecolorallocate($canvas, 255, 255, 255));
+                    imagecopy($canvas, $image, 0, 0, 0, 0, $w, $h);
+                    ob_start();
+                    $png ? imagepng($canvas, null, 9) : imagejpeg($canvas, null, 85);
+                    $encoded = (string) ob_get_clean();
+                    $id = (string) (count($this->icon_resources) + 1);
+                    $this->icon_resources[$id] = base64_encode($encoded);
+                    $this->icon_cache[$key] = array($id, $w, $h);
+                }
+            } catch (Throwable $ex) {
+                // missing or unreadable file: no icon
+            }
+        }
+        if ($this->icon_cache[$key] === null) {
+            return null;
+        }
+
+        return array($this->icon_cache[$key][0], $this->icon_cache[$key][1], $this->icon_cache[$key][2], $position);
+    }
+
+    /**
      * Get portrait size
      *
      * This module returns the height or width a portrait must have
@@ -718,7 +798,19 @@ class ExportFamilyBookData extends AbstractModule
      */
     private function graphmlFooter()
     {
-        return '<data key="d0"> <y:Resources/> </data>' . "\n" .
+        if ($this->icon_resources === array()) {
+            return '<data key="d0"> <y:Resources/> </data>' . "\n" .
+                '</graph> </graphml>';
+        }
+
+        // embedded portraits (@PortraitIcon@), base64 in lines of 76 characters as yEd writes them
+        $resources = '';
+        foreach ($this->icon_resources as $id => $data) {
+            $resources .= '<y:Resource id="' . $id . '" type="java.awt.image.BufferedImage">' .
+                substr(chunk_split($data, 76, "&#13;\n"), 0, -strlen("&#13;\n")) . '</y:Resource>' . "\n";
+        }
+
+        return '<data key="d0"> <y:Resources>' . "\n" . $resources . '</y:Resources> </data>' . "\n" .
             '</graph> </graphml>';
     }
 
@@ -1793,6 +1885,13 @@ class ExportFamilyBookData extends AbstractModule
                             );
                             // a file name: in LaTeX "{", "}" and "~" stay unchanged
                             $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype === "latex" ? "latex_filename" : $doctype);
+                            break;
+                        case "PortraitIcon":
+                            // GraphML only: the portrait is embedded in the file and shown as icon of the
+                            // node label; the placeholder itself returns no text
+                            if ($doctype === "graphml" && $record instanceof Individual) {
+                                $this->node_icon = $this->portraitIcon($record, $format) ?? $this->node_icon;
+                            }
                             break;
                         case "PortraitSize":
                             $tag_replacement = $this->getPortraitSize(
@@ -3297,6 +3396,8 @@ class ExportFamilyBookData extends AbstractModule
         $this->generationInd  = array();
         $this->include_exclude_media = array();
         $this->media_included = array();
+        $this->icon_resources = array();
+        $this->icon_cache = array();
 
 
         foreach (array(
@@ -3414,6 +3515,8 @@ class ExportFamilyBookData extends AbstractModule
                                 $col_border = $parameter['border_link_color'];
                             }
                             $font_size = $parameter['font_size_' . $s];
+                            // set by @PortraitIcon@
+                            $this->node_icon = null;
                             // loop to create the output for the node label
                             // and the node description
                             foreach (array(
@@ -3447,6 +3550,20 @@ class ExportFamilyBookData extends AbstractModule
                                 explode("&lt;br&gt;", $nodetext["label"])
                             ) +
                                 count(explode("&lt;tr&gt;", $nodetext["label"])) + 1;
+                            $node_height = 12 * $label_rows;
+
+                            // portrait as icon of the label (@PortraitIcon@)
+                            $icon_attributes = '';
+                            if ($this->node_icon !== null) {
+                                list($icon_id, $icon_width, $icon_height, $icon_position) = $this->node_icon;
+                                if ($icon_position === 'left') {
+                                    $icon_attributes = ' iconData="' . $icon_id . '" iconTextGap="4" horizontalTextPosition="right" verticalTextPosition="center"';
+                                    $node_height = max($node_height, $icon_height + 8);
+                                } else {
+                                    $icon_attributes = ' iconData="' . $icon_id . '" iconTextGap="4" horizontalTextPosition="center" verticalTextPosition="bottom"';
+                                    $node_height += $icon_height + 4;
+                                }
+                            }
 
                             // create export for the node
                             $buffer .= '<node id="' . $node_id . '">' . "\n" .
@@ -3454,14 +3571,15 @@ class ExportFamilyBookData extends AbstractModule
                                 '.html]]></data>' . "\n" . '<data key="d2"><![CDATA[' .
                                 $nodetext["description"] . ']]></data>' . "\n" .
                                 '<data key="d3">' . '<y:GenericNode configuration="' .
-                                $node_style . '"> <y:Geometry height="' . (12 * $label_rows) .
+                                $node_style . '"> <y:Geometry height="' . $node_height .
                                 '" width="' . $box_width .
                                 '" x="10" y="10"/> <y:Fill color="' . $col .
                                 '" transparent="false"/> <y:BorderStyle color="' .
                                 $col_border . '" type="line" width="' . $border_width .
                                 '"/> <y:NodeLabel alignment="center" autoSizePolicy="content" hasBackgroundColor="false" hasLineColor="false" textColor="#000000" fontFamily="' .
                                 $parameter['font'] . '" fontSize="' . $font_size .
-                                '" fontStyle="plain" visible="true" modelName="internal" modelPosition="l" width="129" height="19" x="1" y="1">';
+                                '" fontStyle="plain" visible="true" modelName="internal" modelPosition="l" width="129" height="19" x="1" y="1"' .
+                                $icon_attributes . '>';
 
                             // no line break before $nodetext allowed
                             $buffer .= $nodetext["label"] . "\n" .
