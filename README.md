@@ -284,6 +284,107 @@ When the page is opened (`<type>` is `latex` or `graphml`), the first existing s
 
 Sources 3 to 5 are alternatives: only the first existing file of them is used.
 
+## Notes on the templates
+
+### `IfExists` and `IfExist`
+
+`@FeFactType&IfExists@` and `@FeAttributeType&IfExists@` return nothing if the individual has no fact of
+this type. Both spellings work: `IfExists` (as in the help of the form) and `IfExist` (older templates).
+
+### Special characters in the LaTeX export
+
+Data from webtrees (names, places, dates, facts, notes, captions of pictures, titles and authors of sources)
+may contain characters with a special meaning in LaTeX. The export masks them, so they appear in the book as
+they are written in webtrees:
+
+| Character in webtrees | In the `.tex` file |
+|---|---|
+| `\` | `\textbackslash ` |
+| `{` `}` | `\{` `\}` |
+| `~` | `\textasciitilde{}` (prints a tilde, e.g. in `*~` or in a web address, not a space) |
+| `&` `$` `%` `_` `#` `^` `\|` `§` | `\&` `\$` `\%` `\_` `\#` `\^` `\textbar` `\§` |
+| `...` | `\ldots` |
+| `"` | `"{}` |
+| line break in a note | `\\` |
+
+In the bibliography (the `.bib` part of the file) the title and the author of a source are masked in the
+same way, with `\textbraceleft{}`/`\textbraceright{}` for braces and `\textquotedbl{}` for `"`, because
+BibTeX itself needs balanced braces and ends a value at `"`.
+
+Nothing is masked in the text of the templates, the preamble, title and epilog, the symbols, the
+relationship symbols and the names of the branches: they are LaTeX written on purpose. The name of a branch
+is therefore used unchanged as heading and for `@Link@`. File names (`@FeMediaFile@`, `@Portrait@`) keep
+`{`, `}` and `~`, because these are valid characters of a path; use `\detokenize{...}` around a path in
+`\includegraphics` as in the example template.
+
+### Labels of individuals that connect two branches
+
+An individual where one branch ends and another begins (start or stop individual of a branch, see
+[Branches](#branches)) has a full entry in both branches, with the name of the other branch for `@Link@`.
+LaTeX allows each label only once, so only one of the two entries defines the label of the individual:
+
+- `@Id&...@` directly inside `\label{...}` returns nothing in the second entry. In the example template the
+  label is written as `<\label{@Id&xref@}>`, so the whole block is left out there.
+- The label stays with the entry in the individual's own branch (the later branch of the list). If this
+  branch is switched off, the entry in the other branch defines the label.
+- `\pageref{@Id&xref@}` therefore always points to the entry in the individual's own branch. Everything else
+  of the second entry stays as it is (number, index entry, sources, pictures).
+
+Existing templates need no change. The labels of pictures (`\label{fig:@FeMediaId@}`) are not affected: with
+`@ForeachMedia&...&...&unique@` each picture is placed only once anyway.
+
+### Portraits in the family tree chart
+
+`@PortraitIcon@` in the label template of the individuals (GraphML) puts the portrait of the individual into
+the `.graphml` file itself. yEd shows it as the icon of the box, above or left of the text. No folder with
+pictures is needed on the computer that runs yEd.
+
+    @PortraitIcon&width&position&type@
+
+| Part | Values | Default |
+|---|---|---|
+| width | width of the picture in pixels; yEd shows it in this size | `100` |
+| position | `top` (picture above the text) or `left` (picture left of the text) | `top` |
+| type | `jpg` (quality 85) or `png` (larger files) | `jpg` |
+
+- The portrait is the highlighted image of the individual in webtrees. webtrees reduces it like the thumbnails
+  of its web pages (and keeps the reduced pictures in its cache, so the next export is faster). A picture
+  higher than 1.5 times its width is reduced to this height.
+- Only pictures the user may see in webtrees are embedded. Individuals without portrait, with a missing or
+  unreadable file or with an external picture (a web address) get no picture; there is no silhouette.
+- A picture used by several boxes is embedded only once.
+- The placeholder returns no text, its place in the template does not matter. In the LaTeX export it returns
+  nothing.
+- The height of the box is increased by the height of the picture. As before, use **Tools → Fit Node to
+  Label** in yEd (see below).
+- Why not `<img src="data:...">` in the HTML of the label: yEd draws HTML labels with Java, which does not
+  load such pictures. yEd itself stores pictures as resources in the file and refers to them as label icons;
+  `@PortraitIcon@` writes them in the same way.
+
+Size of the file: in a test with about 560 portraits, the file grew by 2.9 MB (about 3.6 KB per picture with
+100 pixels). The first export takes longer, because webtrees creates the reduced pictures.
+
+How to change an existing template that uses picture files:
+
+1. Remove the part with the picture, for example
+   `{<td width="33"><img src="file:/path/to/thumbs/@Portrait@" ... height="@PortraitSize&w30@"></td>}`.
+2. Write `@PortraitIcon&100&left@` (picture left of the text, as in the old table) or `@PortraitIcon@`
+   (picture above the text) anywhere in the template, e.g. directly after the first line `{}@&`.
+3. If the box is too narrow for picture and text, increase the width of the boxes in the form.
+
+Templates that keep `@Portrait@` with a path work as before.
+
+### Errors in a template or in the list of branches
+
+A typing error in a template (a bracket that is not closed, a loop without `@EndForeach@`, a placeholder that
+does not exist) or a wrong value in the list of branches does not create a file. The page shows the form again
+with the values entered and a message that names the error.
+
+### Pictures that are skipped
+
+A link to a media object that does not exist and a media file without file extension (e.g. `photo` instead
+of `photo.jpg`) are skipped, in the export and on the page **Image selection**.
+
 ## From the exported file to a PDF
 
 ### Family book: `.tex` to PDF with TeXworks (MiKTeX)
@@ -324,8 +425,10 @@ Notes:
 
 ### Family tree chart: `.graphml` to PDF with yEd
 
-The thumbnails in the node labels are read from the path given in the label template
-(`file:/path/to/webtrees/data/media/thumbs/` in the example). Adapt it before the export.
+The example template embeds the portraits in the file (`@PortraitIcon@`, see
+[Portraits in the family tree chart](#portraits-in-the-family-tree-chart)), so no folder with pictures is
+needed. A template that refers to picture files with a path (`<img src="file:/...@Portrait@">`) needs
+these files on the computer that runs yEd.
 
 1. Open the exported `.graphml` file in yEd. All nodes are placed on top of each other at first.
 2. Adapt the height of the nodes to their content, so that the pictures fit into the boxes:

@@ -349,6 +349,14 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 'Direction: the branch starts with the start individual and first goes to the parents, to spouses and children, or both. From there it continues in all directions until it reaches a stop individual. A stop individual still belongs to the branch, but the branch does not continue beyond it.' => 'Richtung: Der Zweig beginnt bei der Startperson und geht zuerst zu den Eltern, zu Ehepartnern und Kindern oder in beide Richtungen. Von dort geht er in alle Richtungen weiter, bis er eine Stopp-Person erreicht. Eine Stopp-Person gehört noch zum Zweig, der Zweig geht aber nicht über sie hinaus.',
                 'If a later branch reaches individuals of an earlier branch, they move to the later branch. Switching a branch off does not change which branch an individual belongs to.' => 'Erreicht ein späterer Zweig Personen eines früheren Zweigs, wechseln sie in den späteren Zweig. Das Ausschalten eines Zweigs ändert nicht, zu welchem Zweig eine Person gehört.',
                 '%1$s of %2$s branches are exported.' => '%1$s von %2$s Zweigen werden exportiert.',
+                'GraphML only: embeds the portrait in the file and shows it as icon of the box' => 'Nur GraphML: bettet das Portrait in die Datei ein und zeigt es als Bild im Kasten',
+                'width in pixels (default 100) & top or left & jpg or png' => 'Breite in Pixeln (Standard 100) & top (oben) oder left (links) & jpg oder png',
+                'Error in the template: the bracket “%1$s” is not closed: %2$s' => 'Fehler im Template: Die Klammer „%1$s“ wird nicht geschlossen: %2$s',
+                'Error in the template: the loop “%1$s” has no matching %2$s: %3$s' => 'Fehler im Template: Zur Schleife „%1$s“ fehlt das passende %2$s: %3$s',
+                'Error in the template: the placeholder “%s” does not exist.' => 'Fehler im Template: Den Platzhalter „%s“ gibt es nicht.',
+                'Error in the list of branches: a line has too many or too few columns: %s' => 'Fehler in der Liste der Zweige: Eine Zeile hat zu viele oder zu wenige Spalten: %s',
+                'Error in the list of branches: the value “%1$s” is not allowed in the last column (allowed: %2$s): %3$s' => 'Fehler in der Liste der Zweige: Der Wert „%1$s“ ist in der letzten Spalte nicht erlaubt (erlaubt: %2$s): %3$s',
+                'Error in the list of branches: the direction “%1$s” is not allowed (allowed: %2$s): %3$s' => 'Fehler in der Liste der Zweige: Die Richtung „%1$s“ ist nicht erlaubt (erlaubt: %2$s): %3$s',
             ];
         }
 
@@ -563,6 +571,10 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             FlashMessages::addMessage(e(I18N::translate('The images have been marked as reviewed.')), 'success');
         } elseif ($mod_action === 'save_media') {
             $selection = $this->mediaSelection($tree, $individual, $profile);
+            if ($selection['error']) {
+                // nothing is saved, the message is already set
+                return redirect($url);
+            }
 
             // the images of the page (upper case => xref); images of the include list cannot be left out
             $all = array();
@@ -614,7 +626,8 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
      * @param Tree $tree
      * @param Individual|null $individual reference individual
      * @param string $profile ID of the profile ('' = Standard)
-     * @return array{collected: array, include: array<string,true>, exclude: array<string,true>, exclude_value: string}
+     * @return array{error: bool, collected: array, include: array<string,true>, exclude: array<string,true>, exclude_value: string}
+     *         error: true if a template or the branch list has an error (message set, no images)
      *         include/exclude: media IDs (upper case) of the lists include_media/exclude_media
      */
     private function mediaSelection(Tree $tree, ?Individual $individual, string $profile): array
@@ -622,8 +635,19 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         $settings = $this->readProfileSettings('latex', $tree, $profile);
         $settings['refid'] = $individual?->xref() ?? '';
 
+        try {
+            $collected = (new ExportFamilyBookData())->collectLatexMedia($tree, $settings);
+            $error = false;
+        } catch (ExportFamilyBookTemplateException $ex) {
+            // error in a template or in the branch list: the page shows the message and no images
+            FlashMessages::addMessage(e($ex->getMessage()), 'danger');
+            $collected = array('persons' => array(), 'media' => array());
+            $error = true;
+        }
+
         return array(
-            'collected' => (new ExportFamilyBookData())->collectLatexMedia($tree, $settings),
+            'error' => $error,
+            'collected' => $collected,
             'include' => $this->mediaIdSet($settings['include_media'] ?? ''),
             'exclude' => $this->mediaIdSet($settings['exclude_media'] ?? ''),
             'exclude_value' => $settings['exclude_media'] ?? '',
@@ -817,7 +841,16 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 // end of copy from GedcomExportService::export
 
                 $exportData = new ExportFamilyBookData();
-                $resource = $exportData->export($request, $stream);
+                try {
+                    $resource = $exportData->export($request, $stream);
+                } catch (ExportFamilyBookTemplateException $ex) {
+                    // error in a template or in the branch list: show the form again with the
+                    // submitted values and the message instead of the download
+                    fclose($stream);
+                    FlashMessages::addMessage(e($ex->getMessage()), 'danger');
+                    $response = $this->showPage($request, $page_type, $this->settingsFromForm($page_type, $parsedBodys));
+                    break;
+                }
                 $stream   = $this->stream_factory->createStreamFromResource($resource);
 
                 $this->tree = $tree;
@@ -951,6 +984,12 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 'fallback ' . I18N::translate('or') . ' silhouette',
                 '@Portrait&fallback@'
             ),
+            array(
+                'PortraitIcon',
+                I18N::translate('GraphML only: embeds the portrait in the file and shows it as icon of the box'),
+                I18N::translate('width in pixels (default 100) & top or left & jpg or png'),
+                '@PortraitIcon&100&top@'
+            ),
             array('Gedcom', '', '-', '@Gedcom@'),
             array(
                 'Reference',
@@ -1006,7 +1045,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             array(
                 'FeFactType, FeAttributeType',
                 I18N::translate('Returns the fact type within a ForeachFactOuter loop'),
-                'IfExists (nothing is returned if no facts exists)&prefix&postfix',
+                'IfExists or IfExist (nothing is returned if no facts exists)&prefix&postfix',
                 '@FeFactType&IfExists&\underline{&}:@'
             ),
             array(

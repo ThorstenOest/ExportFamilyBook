@@ -41,6 +41,16 @@ use Illuminate\Support\Collection;
 
 
 /**
+ * Error in a template or in the branch list that the user can correct in the form
+ *
+ * The message is translated and not escaped; the module shows it as a message on the
+ * page of the form instead of the export (see ExportFamilyBook::handleForm).
+ */
+class ExportFamilyBookTemplateException extends RuntimeException
+{
+}
+
+/**
  * Main class for FamilyBookExport module
  */
 class ExportFamilyBookData extends AbstractModule
@@ -64,6 +74,21 @@ class ExportFamilyBookData extends AbstractModule
     private ?array $media_collector = null;
     // the individual whose template is processed (used by the collection)
     private string $media_person = '';
+
+    // LaTeX: an individual connecting two branches has an entry in both branches (the "copy" in the
+    // old branch, see getRecords). Only one entry may define the label of the individual
+    // (\label{@Id&xref@}), otherwise LaTeX reports "multiply defined labels" and \pageref may point
+    // to the copy. $entry_xref is the individual of the entry processed, $entry_has_label is false
+    // for an entry that must not define the label (see labelEntries).
+    private string $entry_xref = '';
+    private bool $entry_has_label = true;
+
+    // GraphML: portraits embedded as label icons (@PortraitIcon@, see portraitIcon)
+    // resources of the file: id => base64 data; cache: key of the picture => [id, width, height]
+    private array $icon_resources = array();
+    private array $icon_cache = array();
+    // icon of the node processed: [id, width, height, position] or null
+    private ?array $node_icon = null;
 
     /**
      * Collect the media that the LaTeX export would include, without creating the book
@@ -486,6 +511,79 @@ class ExportFamilyBookData extends AbstractModule
     }
 
     /**
+     * Embed the portrait of an individual as icon of the node label (GraphML, @PortraitIcon@)
+     *
+     * yEd shows no "data:" pictures in HTML labels and keeps no paths of pictures; it stores pictures
+     * as resources in the file (<y:Resource type="java.awt.image.BufferedImage">, base64) and refers to
+     * them with iconData="..." in the node label. The picture is reduced by webtrees (as for the
+     * thumbnails of the web pages, incl. its cache and watermark rules) and stored as JPEG.
+     *
+     * Format: @PortraitIcon&width&position&type@
+     *   width     width in pixels (default 100); yEd shows the icon in this size
+     *   position  "top" (default: picture above the text) or "left" (picture left of the text)
+     *   type      "jpg" (default, quality 85) or "png"
+     *
+     * Nothing is embedded if the individual has no highlighted image, if the current user may not see
+     * the media object, or if the file is missing or cannot be read.
+     *
+     * @param Individual $record
+     * @param array $format
+     * @return array{0: string, 1: int, 2: int, 3: string}|null resource id, width, height, position
+     */
+    private function portraitIcon(Individual $record, array $format): ?array
+    {
+        $width = (int) $this->get_format($format, 0);
+        if ($width < 1 || $width > 2000) {
+            $width = 100;
+        }
+        $position = $this->get_format($format, 1) === "left" ? "left" : "top";
+        $png = strtolower($this->get_format($format, 2)) === "png";
+
+        $media_file = $record->findHighlightedMediaFile();
+        if ($media_file === null || $media_file->isExternal() || !$media_file->media()->canShow()) {
+            return null;
+        }
+
+        $key = $media_file->media()->xref() . '|' . $media_file->filename() . '|' . $width . '|' . (int) $png;
+        if (!array_key_exists($key, $this->icon_cache)) {
+            $this->icon_cache[$key] = null;
+            try {
+                $factory = Registry::imageFactory();
+                // a portrait higher than 1.5 times its width is reduced to this height
+                $data = $factory->mediaFileThumbnail(
+                    $media_file,
+                    $width,
+                    (int) round($width * 1.5),
+                    'contain',
+                    $factory->thumbnailNeedsWatermark($media_file, Auth::user())
+                );
+                $image = @imagecreatefromstring($data);
+                if ($image !== false) {
+                    $w = imagesx($image);
+                    $h = imagesy($image);
+                    // transparent parts (PNG, GIF) become white
+                    $canvas = imagecreatetruecolor($w, $h);
+                    imagefill($canvas, 0, 0, imagecolorallocate($canvas, 255, 255, 255));
+                    imagecopy($canvas, $image, 0, 0, 0, 0, $w, $h);
+                    ob_start();
+                    $png ? imagepng($canvas, null, 9) : imagejpeg($canvas, null, 85);
+                    $encoded = (string) ob_get_clean();
+                    $id = (string) (count($this->icon_resources) + 1);
+                    $this->icon_resources[$id] = base64_encode($encoded);
+                    $this->icon_cache[$key] = array($id, $w, $h);
+                }
+            } catch (Throwable $ex) {
+                // missing or unreadable file: no icon
+            }
+        }
+        if ($this->icon_cache[$key] === null) {
+            return null;
+        }
+
+        return array($this->icon_cache[$key][0], $this->icon_cache[$key][1], $this->icon_cache[$key][2], $position);
+    }
+
+    /**
      * Get portrait size
      *
      * This module returns the height or width a portrait must have
@@ -700,7 +798,19 @@ class ExportFamilyBookData extends AbstractModule
      */
     private function graphmlFooter()
     {
-        return '<data key="d0"> <y:Resources/> </data>' . "\n" .
+        if ($this->icon_resources === array()) {
+            return '<data key="d0"> <y:Resources/> </data>' . "\n" .
+                '</graph> </graphml>';
+        }
+
+        // embedded portraits (@PortraitIcon@), base64 in lines of 76 characters as yEd writes them
+        $resources = '';
+        foreach ($this->icon_resources as $id => $data) {
+            $resources .= '<y:Resource id="' . $id . '" type="java.awt.image.BufferedImage">' .
+                substr(chunk_split($data, 76, "&#13;\n"), 0, -strlen("&#13;\n")) . '</y:Resource>' . "\n";
+        }
+
+        return '<data key="d0"> <y:Resources>' . "\n" . $resources . '</y:Resources> </data>' . "\n" .
             '</graph> </graphml>';
     }
 
@@ -837,9 +947,11 @@ class ExportFamilyBookData extends AbstractModule
                         $pos_end = $pos_bracket_end;
                         $i++;
                     } else {
-                        exit(e("No right bracket found for left bracket at position " . $pos_bracket .
-                            " for template: " . $template));
-                        $pos_end = strlen($template);
+                        throw new ExportFamilyBookTemplateException(I18N::translate(
+                            'Error in the template: the bracket “%1$s” is not closed: %2$s',
+                            $bracket_array[0],
+                            $this->templateExcerpt($template, $pos_bracket)
+                        ));
                     }
                 } elseif ($pos !== false) {
                     // there is a remaining tag symbol
@@ -915,9 +1027,13 @@ class ExportFamilyBookData extends AbstractModule
                                 $pos_end = $pos_EndForeach + 11;
                                 $i++;
                             } else {
-                                // Foreach end found
-                                $pos_end = strlen($template);
-                                exit(e("No EndForeach tag found in tempalte for " . $component));
+                                // no matching @EndForeach@
+                                throw new ExportFamilyBookTemplateException(I18N::translate(
+                                    'Error in the template: the loop “%1$s” has no matching %2$s: %3$s',
+                                    $component,
+                                    '@EndForeach@',
+                                    $this->templateExcerpt($template, $pos)
+                                ));
                             }
                         } else {
                             // this is a single tag
@@ -931,6 +1047,10 @@ class ExportFamilyBookData extends AbstractModule
                                     "fact" => "",
                                     "subtemplate" => ""
                                 );
+                                // @Id@ directly in "\label{": the label of the individual (see $entry_has_label)
+                                if ($component === "Id" && preg_match('/\\\\label\s*\{\s*$/', substr($template, 0, $pos))) {
+                                    $template_array[$i]["in_label"] = true;
+                                }
                             } else {
                                 $template_array[$i] = array(
                                     "component" => "Fact",
@@ -988,6 +1108,37 @@ class ExportFamilyBookData extends AbstractModule
         return array(
             $template_array, $bracket_array
         );
+    }
+
+    /**
+     * A short part of a template for an error message
+     *
+     * @param string $template
+     * @param int $pos position of the error
+     * @return string the template from $pos on, at most 60 characters, line breaks as spaces
+     */
+    private function templateExcerpt(string $template, int $pos): string
+    {
+        $excerpt = preg_replace('/\s+/', ' ', substr($template, $pos));
+        if (mb_strlen($excerpt) > 60) {
+            $excerpt = mb_substr($excerpt, 0, 60) . '…';
+        }
+
+        return $excerpt;
+    }
+
+    /**
+     * Error for a placeholder or loop of a template that does not exist
+     *
+     * @param string $component name of the placeholder or loop
+     * @return ExportFamilyBookTemplateException
+     */
+    private function unknownPlaceholder(string $component): ExportFamilyBookTemplateException
+    {
+        return new ExportFamilyBookTemplateException(I18N::translate(
+            'Error in the template: the placeholder “%s” does not exist.',
+            '@' . $component . '@'
+        ));
     }
 
     /**
@@ -1497,6 +1648,14 @@ class ExportFamilyBookData extends AbstractModule
                                     }
                                     break;
                             }
+                            if (
+                                !is_null($rec) && !$this->entry_has_label && !empty($comp["in_label"]) &&
+                                $rec->xref() === $this->entry_xref
+                            ) {
+                                // label of an individual in an entry that must not define it (copy of an
+                                // individual connecting two branches): nothing, so "<\label{@Id&xref@}>" is removed
+                                $rec = null;
+                            }
                             if (!is_null($rec)) {
                                 $xref = $rec->xref();
                                 if ($this->get_format($format, 0) === "") {
@@ -1572,7 +1731,11 @@ class ExportFamilyBookData extends AbstractModule
                                 array_key_exists("sub_branch_link_id", $this->generationInd[$ind_id])
                             ) {
                                 $tag_replacement .= $this->generationInd[$ind_id]["sub_branch_link_name"];
-                                $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
+                                // the name of a branch is no data but a setting and may contain LaTeX
+                                // (it is also used unchanged as heading), so it is masked only for GraphML
+                                if ($doctype !== "latex") {
+                                    $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
+                                }
                             }
                             break;
                         case "Ancestor":
@@ -1586,9 +1749,11 @@ class ExportFamilyBookData extends AbstractModule
                         case "FeAttributeType":
                         case "FeFactType":
                             $return_value = TRUE;
-                            if ($this->get_format($format, 0) == "IfExist" and  get_class($record) != "Fisharebest\Webtrees\Fact") {
+                            // "IfExists" is the spelling of the help, "IfExist" the one of older templates
+                            if (in_array($this->get_format($format, 0), array("IfExist", "IfExists"), true) and  get_class($record) != "Fisharebest\Webtrees\Fact") {
                                 $fact_records = $this->recordFacts($record, (array) $fact_type, true);
-                                if (empty($fact_records)) {
+                                // a collection (webtrees 2), empty() would always be false
+                                if (count($fact_records) === 0) {
                                     $return_value = FALSE;
                                 }
                             }
@@ -1596,12 +1761,12 @@ class ExportFamilyBookData extends AbstractModule
                                 if (!empty($fact_symbols) and array_key_exists($fact_type, $fact_symbols)) {
                                     $tag_replacement .= $fact_symbols[$fact_type];
                                 } else {
+                                    // masked once (masking twice would mask the masking characters again)
                                     $tag_replacement .= $this->substituteSpecialCharacters(
                                         //GedcomTag::getLabel($fact_type, $record_context),
-                                        $this->getGEDCOMTagLabel($fact_type, $record_context->tag()),
+                                        (string) $this->getGEDCOMTagLabel($fact_type, $record_context->tag()),
                                         $doctype
                                     );
-                                    $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
 
 
                                     $tag_replacement = $this->get_format($format, 1) . $tag_replacement;
@@ -1677,9 +1842,8 @@ class ExportFamilyBookData extends AbstractModule
                             $filename = $record->filename();
                             $filename_array = explode(".", $filename);
                             $n = count($filename_array);
-                            if ($n == 1) {
-                                // file name has no ending stop code
-                                exit(e('Image name \'' . $filename . "\' does not have an ending"));
+                            if ($this->fileExtension($filename) === "") {
+                                // file name without extension: not reached, @ForeachMedia@ skips such files
                             } else if ($this->get_format($format, 0) == "NoExtension") {
                                 // return file name without ending	 
                                 $tag_replacement .= implode(".", array_slice($filename_array, 0, $n - 1));
@@ -1720,7 +1884,15 @@ class ExportFamilyBookData extends AbstractModule
                                 $record,
                                 $this->get_format($format, 0)
                             );
-                            $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
+                            // a file name: in LaTeX "{", "}" and "~" stay unchanged
+                            $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype === "latex" ? "latex_filename" : $doctype);
+                            break;
+                        case "PortraitIcon":
+                            // GraphML only: the portrait is embedded in the file and shown as icon of the
+                            // node label; the placeholder itself returns no text
+                            if ($doctype === "graphml" && $record instanceof Individual) {
+                                $this->node_icon = $this->portraitIcon($record, $format) ?? $this->node_icon;
+                            }
                             break;
                         case "PortraitSize":
                             $tag_replacement = $this->getPortraitSize(
@@ -1814,7 +1986,7 @@ class ExportFamilyBookData extends AbstractModule
                             }
                             break;
                         default:
-                            exit(e("Tag " . $comp["component"] . " in template not defined"));
+                            throw $this->unknownPlaceholder($comp["component"]);
                     }
                 } elseif ($comp["type"] == "foreach") {
                     // loop
@@ -1961,9 +2133,6 @@ class ExportFamilyBookData extends AbstractModule
                             break;
                         case "ForeachMedia":
                             // loop over media files
-                            if ($record->xref() == "I4443") {
-                                $id1 = $record->xref();
-                            };
                             $media_links = [];
                             foreach ($this->recordFacts($record, ["OBJE"], true) as $fact) {
                                 // get the media object and add it to the array
@@ -2001,7 +2170,8 @@ class ExportFamilyBookData extends AbstractModule
                                 $n1 = count($media_links);
                             }
 
-                            //
+                            // links to a media object which does not exist are skipped
+                            $media_links = array_filter($media_links, fn ($media) => $media instanceof Media);
                             if (!empty($media_links)) {
                                 foreach ($media_links as $media_record) {
                                     $id = trim($media_record->xref(), "@");
@@ -2054,6 +2224,11 @@ class ExportFamilyBookData extends AbstractModule
                                                     } else {
                                                         $usefile = false;
                                                     }
+                                                }
+                                                // files without extension are skipped (@FeMediaFile&NoExtension@
+                                                // and \includegraphics need one), also on the page "Image selection"
+                                                if ($usefile && $this->fileExtension($file->filename()) === "") {
+                                                    $usefile = false;
                                                 }
 
                                                 // collect the media file (page "Image selection")
@@ -2136,7 +2311,7 @@ class ExportFamilyBookData extends AbstractModule
                             }
                             break;
                         default:
-                            exit(e("Tag " . $comp["component"] . " in template not defined"));
+                            throw $this->unknownPlaceholder($comp["component"]);
                     }
                 }
                 //
@@ -2230,10 +2405,20 @@ class ExportFamilyBookData extends AbstractModule
 			 * $subject = preg_replace ( "/<(?!br>)/", "&lt;", $subject );
 			 */
         }
-        if ($doctype == "latex") {
+        if ($doctype == "latex" || $doctype == "latex_filename") {
+            // the replacements are done one after the other: braces are masked directly after the
+            // backslash, before any replacement which adds braces itself ('"{}', '\textasciitilde{}')
+            // "latex_filename" (file names, e.g. of @Portrait@) keeps the replacements of older
+            // versions: braces and "~" are valid in a path and must stay unchanged there
             $replacements = array(
                 array(
                     '/\Q\\\E/', '\textbackslash '
+                ), array(
+                    '/\Q{\E/', '\{'
+                ), array(
+                    '/\Q}\E/', '\}'
+                ), array(
+                    '/\Q~\E/', '\textasciitilde{}'
                 ), array(
                     '/\Q&\E/', '\& '
                 ), array(
@@ -2264,13 +2449,57 @@ class ExportFamilyBookData extends AbstractModule
 			),array ("/\QÜ\E/",'\"U' 
 			)*/
             );
+            if ($doctype == "latex_filename") {
+                // without the replacements of "{", "}" and "~"
+                array_splice($replacements, 1, 3);
+            }
         }
 
         foreach ($replacements as $r) {
-            $subject = preg_replace($r[0], $r[1], $subject);
+            $subject = preg_replace($r[0], $r[1], (string) $subject);
         }
 
         return $subject;
+    }
+
+    /**
+     * Mask a value of the bibliography (title or author of a source)
+     *
+     * The value is written between double quotes into the .bib file. BibTeX needs balanced braces
+     * and ends the value at a double quote outside braces; LaTeX needs its special characters masked.
+     * All characters are replaced in one pass, so nothing is masked twice.
+     *
+     * @param string $value
+     * @return string
+     */
+    private function bibtexValue(string $value): string
+    {
+        return strtr($value, array(
+            '\\' => '\textbackslash{}',
+            '{' => '\textbraceleft{}',
+            '}' => '\textbraceright{}',
+            '"' => '\textquotedbl{}',
+            '~' => '\textasciitilde{}',
+            '^' => '\textasciicircum{}',
+            '&' => '\&',
+            '%' => '\%',
+            '$' => '\$',
+            '#' => '\#',
+            '_' => '\_',
+            "\r" => '',
+            "\n" => ' ',
+        ));
+    }
+
+    /**
+     * Extension of a file name (without the dot), '' if there is none
+     *
+     * @param string $filename file name with path (also "\" as separator)
+     * @return string
+     */
+    private function fileExtension(string $filename): string
+    {
+        return pathinfo(str_replace('\\', '/', $filename), PATHINFO_EXTENSION);
     }
     /**
      * get Records for individuals and families
@@ -2321,14 +2550,15 @@ class ExportFamilyBookData extends AbstractModule
             // title
             foreach ($record->facts(['TITL']) as $fact) {
                 //foreach ($record->facts('TITL') as $fact) {
-                $ret_string .= ',title   ="' . $fact->Value() . '"';
+                $ret_string .= ',title   ="' . $this->bibtexValue($fact->Value()) . '"';
                 //$ret_string .= ',title   ="' . $fact->Value() . '"';
             }
             // author
             //foreach ($record->facts('AUTH') as $fact) {
             foreach ($record->facts(['AUTH']) as $fact) {
+                // several authors are separated by commas in webtrees and by "and" in BibTeX
                 $ret_string .= ',author   ="' .
-                    str_replace(array(',', '&'), array(' and ', '\&'), $fact->Value()) . '"';
+                    str_replace(',', ' and ', $this->bibtexValue($fact->Value())) . '"';
             }
             $ret_string .= "}";
         }
@@ -2554,7 +2784,10 @@ class ExportFamilyBookData extends AbstractModule
                 $cols = explode($sep1, $row);
                 if (sizeof($cols) > 1) {
                     if (sizeof($cols) > sizeof($seeds_default) || sizeof($cols) < 3) {
-                        throw new RuntimeException("Seed has too many or too few columns: " . $row);
+                        throw new ExportFamilyBookTemplateException(I18N::translate(
+                            'Error in the list of branches: a line has too many or too few columns: %s',
+                            $row
+                        ));
                     }
 
                     $seeds[] = $seeds_default;
@@ -2571,7 +2804,12 @@ class ExportFamilyBookData extends AbstractModule
                             } elseif (strtolower($cols[$i]) === "include") {
                                 $seeds[$key][$seeds_default_keys[$i]] = TRUE;
                             } else {
-                                exit(e("wrong value in seed column 6 value = " . $cols[$i]));
+                                throw new ExportFamilyBookTemplateException(I18N::translate(
+                                    'Error in the list of branches: the value “%1$s” is not allowed in the last column (allowed: %2$s): %3$s',
+                                    $cols[$i],
+                                    'include, exclude',
+                                    $row
+                                ));
                             }
                         } else {
                             $seeds[$key][$seeds_default_keys[$i]] = $cols[$i];
@@ -2581,7 +2819,12 @@ class ExportFamilyBookData extends AbstractModule
                     // apply some checks
                     foreach (array_keys($allowed_values) as $allowed_key) {
                         if (!in_array($seeds[$key][$allowed_key], $allowed_values[$allowed_key])) {
-                            exit(e("wrong value in seed column " . $allowed_key));
+                            throw new ExportFamilyBookTemplateException(I18N::translate(
+                                'Error in the list of branches: the direction “%1$s” is not allowed (allowed: %2$s): %3$s',
+                                $seeds[$key][$allowed_key],
+                                implode(', ', $allowed_values[$allowed_key]),
+                                $row
+                            ));
                         }
                     }
                 }
@@ -2820,7 +3063,13 @@ class ExportFamilyBookData extends AbstractModule
                         $this->generationInd[$xref]["children"]
                     );
                 } else {
-                    exit(e('Wrong seed type for ' .  $seed["name"]));
+                    // not reached: getSeeds() already checks the direction
+                    throw new ExportFamilyBookTemplateException(I18N::translate(
+                        'Error in the list of branches: the direction “%1$s” is not allowed (allowed: %2$s): %3$s',
+                        (string) $direction,
+                        'both, ancestors, descendants',
+                        (string) $seed["name"]
+                    ));
                 }
 
                 do {
@@ -3148,6 +3397,8 @@ class ExportFamilyBookData extends AbstractModule
         $this->generationInd  = array();
         $this->include_exclude_media = array();
         $this->media_included = array();
+        $this->icon_resources = array();
+        $this->icon_cache = array();
 
 
         foreach (array(
@@ -3265,6 +3516,8 @@ class ExportFamilyBookData extends AbstractModule
                                 $col_border = $parameter['border_link_color'];
                             }
                             $font_size = $parameter['font_size_' . $s];
+                            // set by @PortraitIcon@
+                            $this->node_icon = null;
                             // loop to create the output for the node label
                             // and the node description
                             foreach (array(
@@ -3298,6 +3551,20 @@ class ExportFamilyBookData extends AbstractModule
                                 explode("&lt;br&gt;", $nodetext["label"])
                             ) +
                                 count(explode("&lt;tr&gt;", $nodetext["label"])) + 1;
+                            $node_height = 12 * $label_rows;
+
+                            // portrait as icon of the label (@PortraitIcon@)
+                            $icon_attributes = '';
+                            if ($this->node_icon !== null) {
+                                list($icon_id, $icon_width, $icon_height, $icon_position) = $this->node_icon;
+                                if ($icon_position === 'left') {
+                                    $icon_attributes = ' iconData="' . $icon_id . '" iconTextGap="4" horizontalTextPosition="right" verticalTextPosition="center"';
+                                    $node_height = max($node_height, $icon_height + 8);
+                                } else {
+                                    $icon_attributes = ' iconData="' . $icon_id . '" iconTextGap="4" horizontalTextPosition="center" verticalTextPosition="bottom"';
+                                    $node_height += $icon_height + 4;
+                                }
+                            }
 
                             // create export for the node
                             $buffer .= '<node id="' . $node_id . '">' . "\n" .
@@ -3305,14 +3572,15 @@ class ExportFamilyBookData extends AbstractModule
                                 '.html]]></data>' . "\n" . '<data key="d2"><![CDATA[' .
                                 $nodetext["description"] . ']]></data>' . "\n" .
                                 '<data key="d3">' . '<y:GenericNode configuration="' .
-                                $node_style . '"> <y:Geometry height="' . (12 * $label_rows) .
+                                $node_style . '"> <y:Geometry height="' . $node_height .
                                 '" width="' . $box_width .
                                 '" x="10" y="10"/> <y:Fill color="' . $col .
                                 '" transparent="false"/> <y:BorderStyle color="' .
                                 $col_border . '" type="line" width="' . $border_width .
                                 '"/> <y:NodeLabel alignment="center" autoSizePolicy="content" hasBackgroundColor="false" hasLineColor="false" textColor="#000000" fontFamily="' .
                                 $parameter['font'] . '" fontSize="' . $font_size .
-                                '" fontStyle="plain" visible="true" modelName="internal" modelPosition="l" width="129" height="19" x="1" y="1">';
+                                '" fontStyle="plain" visible="true" modelName="internal" modelPosition="l" width="129" height="19" x="1" y="1"' .
+                                $icon_attributes . '>';
 
                             // no line break before $nodetext allowed
                             $buffer .= $nodetext["label"] . "\n" .
@@ -3486,6 +3754,54 @@ class ExportFamilyBookData extends AbstractModule
         $this->graphml_fwrite($gedout, $buffer);
     }
     /**
+     * The entry of each individual which defines the label of the individual
+     *
+     * An individual connecting two branches has a full entry in both (getRecords): the original in its
+     * own branch (key = xref) and a copy in the old branch (key = xref_<number of the old branch>).
+     * The label belongs to the original. If the branch of the original is not exported, the first
+     * exported copy (order of the book) defines it.
+     *
+     * @param array $generationInd_tree see getRecords
+     * @param array $seeds see getSeeds
+     * @return array<string,string> xref => key of the entry
+     */
+    private function labelEntries(array $generationInd_tree, array $seeds): array
+    {
+        $entries = array();
+        foreach ($generationInd_tree as $branch_array) {
+            foreach ($branch_array as $sub_branch_id => $sub_branch_array) {
+                // the same selection of branches as in exportLatex
+                if (!key_exists($sub_branch_id, $seeds) || !$seeds[$sub_branch_id]["include"]) {
+                    continue;
+                }
+                foreach ($sub_branch_array as $generation_array) {
+                    foreach ($generation_array as $ind_id => $value) {
+                        $xref = $value['xref'];
+                        if (!array_key_exists($xref, $entries) || (string) $ind_id === $xref) {
+                            $entries[$xref] = (string) $ind_id;
+                        }
+                    }
+                }
+            }
+        }
+
+        return $entries;
+    }
+
+    /**
+     * Set the entry which is processed next (see $entry_has_label)
+     *
+     * @param string $xref individual of the entry
+     * @param string|int $ind_id key of the entry in generationInd
+     * @param array<string,string> $label_entries see labelEntries
+     */
+    private function setLabelEntry(string $xref, $ind_id, array $label_entries): void
+    {
+        $this->entry_xref = $xref;
+        $this->entry_has_label = ($label_entries[$xref] ?? (string) $ind_id) === (string) $ind_id;
+    }
+
+    /**
      * Export the data in graphml format
      *
      * This is the main module which export the familty tree in graphml
@@ -3564,7 +3880,11 @@ class ExportFamilyBookData extends AbstractModule
                 if (array_key_exists($key, $fact_label)) {
                     $label = $fact_label[$key];
                 } else {
+                    // label of webtrees (the label of the settings may contain LaTeX and is not masked)
                     $label = $this->getGEDCOMTagLabel($key);
+                    if (!is_null($label)) {
+                        $label = $this->substituteSpecialCharacters($label, "latex");
+                    }
                 }
 
                 //$label = GedcomTag::getLabel($key);
@@ -3596,6 +3916,9 @@ class ExportFamilyBookData extends AbstractModule
 
         // get seeds
         $seeds = $this->getSeeds();
+
+        // the entry of each individual which defines its label
+        $label_entries = $this->labelEntries($generationInd_tree, $seeds);
 
         /*
 		 * Create nodes for individuals
@@ -3673,6 +3996,7 @@ class ExportFamilyBookData extends AbstractModule
                                 // and the node description
 
                                 $this->media_person = $xref;
+                                $this->setLabelEntry($xref, $ind_id, $label_entries);
                                 list($nodetext, $tag_resolved) = $this->substitutePlaceHolder(
                                     $record,
                                     $record,
@@ -3748,6 +4072,7 @@ class ExportFamilyBookData extends AbstractModule
                             // and the node description
 
                             $this->media_person = $xref;
+                            $this->setLabelEntry($xref, $ind_id, $label_entries);
                             list($nodetext, $tag_resolved) = $this->substitutePlaceHolder(
                                 $record,
                                 $record,
@@ -3757,6 +4082,10 @@ class ExportFamilyBookData extends AbstractModule
                                 $brackets,
                                 $fact_symbols
                             );
+                            if (!$this->entry_has_label) {
+                                // "\label{@Id&xref@}" without "<...>" around it
+                                $nodetext = str_replace('\label{}', '', $nodetext);
+                            }
 
                             // no line break before $nodetext allowed
                             $buffer .= $nodetext  . "\n";
@@ -3771,6 +4100,8 @@ class ExportFamilyBookData extends AbstractModule
                 }
             }
         }
+
+        $this->setLabelEntry('', '', array());
 
         // add footer and write buffer
         $buffer .= $parameter["epilog"];
