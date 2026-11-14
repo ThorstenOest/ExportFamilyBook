@@ -41,6 +41,16 @@ use Illuminate\Support\Collection;
 
 
 /**
+ * Error in a template or in the branch list that the user can correct in the form
+ *
+ * The message is translated and not escaped; the module shows it as a message on the
+ * page of the form instead of the export (see ExportFamilyBook::handleForm).
+ */
+class ExportFamilyBookTemplateException extends RuntimeException
+{
+}
+
+/**
  * Main class for FamilyBookExport module
  */
 class ExportFamilyBookData extends AbstractModule
@@ -837,9 +847,11 @@ class ExportFamilyBookData extends AbstractModule
                         $pos_end = $pos_bracket_end;
                         $i++;
                     } else {
-                        exit(e("No right bracket found for left bracket at position " . $pos_bracket .
-                            " for template: " . $template));
-                        $pos_end = strlen($template);
+                        throw new ExportFamilyBookTemplateException(I18N::translate(
+                            'Error in the template: the bracket “%1$s” is not closed: %2$s',
+                            $bracket_array[0],
+                            $this->templateExcerpt($template, $pos_bracket)
+                        ));
                     }
                 } elseif ($pos !== false) {
                     // there is a remaining tag symbol
@@ -915,9 +927,13 @@ class ExportFamilyBookData extends AbstractModule
                                 $pos_end = $pos_EndForeach + 11;
                                 $i++;
                             } else {
-                                // Foreach end found
-                                $pos_end = strlen($template);
-                                exit(e("No EndForeach tag found in tempalte for " . $component));
+                                // no matching @EndForeach@
+                                throw new ExportFamilyBookTemplateException(I18N::translate(
+                                    'Error in the template: the loop “%1$s” has no matching %2$s: %3$s',
+                                    $component,
+                                    '@EndForeach@',
+                                    $this->templateExcerpt($template, $pos)
+                                ));
                             }
                         } else {
                             // this is a single tag
@@ -988,6 +1004,37 @@ class ExportFamilyBookData extends AbstractModule
         return array(
             $template_array, $bracket_array
         );
+    }
+
+    /**
+     * A short part of a template for an error message
+     *
+     * @param string $template
+     * @param int $pos position of the error
+     * @return string the template from $pos on, at most 60 characters, line breaks as spaces
+     */
+    private function templateExcerpt(string $template, int $pos): string
+    {
+        $excerpt = preg_replace('/\s+/', ' ', substr($template, $pos));
+        if (mb_strlen($excerpt) > 60) {
+            $excerpt = mb_substr($excerpt, 0, 60) . '…';
+        }
+
+        return $excerpt;
+    }
+
+    /**
+     * Error for a placeholder or loop of a template that does not exist
+     *
+     * @param string $component name of the placeholder or loop
+     * @return ExportFamilyBookTemplateException
+     */
+    private function unknownPlaceholder(string $component): ExportFamilyBookTemplateException
+    {
+        return new ExportFamilyBookTemplateException(I18N::translate(
+            'Error in the template: the placeholder “%s” does not exist.',
+            '@' . $component . '@'
+        ));
     }
 
     /**
@@ -1572,7 +1619,11 @@ class ExportFamilyBookData extends AbstractModule
                                 array_key_exists("sub_branch_link_id", $this->generationInd[$ind_id])
                             ) {
                                 $tag_replacement .= $this->generationInd[$ind_id]["sub_branch_link_name"];
-                                $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
+                                // the name of a branch is no data but a setting and may contain LaTeX
+                                // (it is also used unchanged as heading), so it is masked only for GraphML
+                                if ($doctype !== "latex") {
+                                    $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
+                                }
                             }
                             break;
                         case "Ancestor":
@@ -1586,7 +1637,8 @@ class ExportFamilyBookData extends AbstractModule
                         case "FeAttributeType":
                         case "FeFactType":
                             $return_value = TRUE;
-                            if ($this->get_format($format, 0) == "IfExist" and  get_class($record) != "Fisharebest\Webtrees\Fact") {
+                            // "IfExists" is the spelling of the help, "IfExist" the one of older templates
+                            if (in_array($this->get_format($format, 0), array("IfExist", "IfExists"), true) and  get_class($record) != "Fisharebest\Webtrees\Fact") {
                                 $fact_records = $this->recordFacts($record, (array) $fact_type, true);
                                 if (empty($fact_records)) {
                                     $return_value = FALSE;
@@ -1596,12 +1648,12 @@ class ExportFamilyBookData extends AbstractModule
                                 if (!empty($fact_symbols) and array_key_exists($fact_type, $fact_symbols)) {
                                     $tag_replacement .= $fact_symbols[$fact_type];
                                 } else {
+                                    // masked once (masking twice would mask the masking characters again)
                                     $tag_replacement .= $this->substituteSpecialCharacters(
                                         //GedcomTag::getLabel($fact_type, $record_context),
-                                        $this->getGEDCOMTagLabel($fact_type, $record_context->tag()),
+                                        (string) $this->getGEDCOMTagLabel($fact_type, $record_context->tag()),
                                         $doctype
                                     );
-                                    $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
 
 
                                     $tag_replacement = $this->get_format($format, 1) . $tag_replacement;
@@ -1677,9 +1729,8 @@ class ExportFamilyBookData extends AbstractModule
                             $filename = $record->filename();
                             $filename_array = explode(".", $filename);
                             $n = count($filename_array);
-                            if ($n == 1) {
-                                // file name has no ending stop code
-                                exit(e('Image name \'' . $filename . "\' does not have an ending"));
+                            if ($this->fileExtension($filename) === "") {
+                                // file name without extension: not reached, @ForeachMedia@ skips such files
                             } else if ($this->get_format($format, 0) == "NoExtension") {
                                 // return file name without ending	 
                                 $tag_replacement .= implode(".", array_slice($filename_array, 0, $n - 1));
@@ -1720,7 +1771,8 @@ class ExportFamilyBookData extends AbstractModule
                                 $record,
                                 $this->get_format($format, 0)
                             );
-                            $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
+                            // a file name: in LaTeX "{", "}" and "~" stay unchanged
+                            $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype === "latex" ? "latex_filename" : $doctype);
                             break;
                         case "PortraitSize":
                             $tag_replacement = $this->getPortraitSize(
@@ -1814,7 +1866,7 @@ class ExportFamilyBookData extends AbstractModule
                             }
                             break;
                         default:
-                            exit(e("Tag " . $comp["component"] . " in template not defined"));
+                            throw $this->unknownPlaceholder($comp["component"]);
                     }
                 } elseif ($comp["type"] == "foreach") {
                     // loop
@@ -1961,9 +2013,6 @@ class ExportFamilyBookData extends AbstractModule
                             break;
                         case "ForeachMedia":
                             // loop over media files
-                            if ($record->xref() == "I4443") {
-                                $id1 = $record->xref();
-                            };
                             $media_links = [];
                             foreach ($this->recordFacts($record, ["OBJE"], true) as $fact) {
                                 // get the media object and add it to the array
@@ -2001,7 +2050,8 @@ class ExportFamilyBookData extends AbstractModule
                                 $n1 = count($media_links);
                             }
 
-                            //
+                            // links to a media object which does not exist are skipped
+                            $media_links = array_filter($media_links, fn ($media) => $media instanceof Media);
                             if (!empty($media_links)) {
                                 foreach ($media_links as $media_record) {
                                     $id = trim($media_record->xref(), "@");
@@ -2054,6 +2104,11 @@ class ExportFamilyBookData extends AbstractModule
                                                     } else {
                                                         $usefile = false;
                                                     }
+                                                }
+                                                // files without extension are skipped (@FeMediaFile&NoExtension@
+                                                // and \includegraphics need one), also on the page "Image selection"
+                                                if ($usefile && $this->fileExtension($file->filename()) === "") {
+                                                    $usefile = false;
                                                 }
 
                                                 // collect the media file (page "Image selection")
@@ -2136,7 +2191,7 @@ class ExportFamilyBookData extends AbstractModule
                             }
                             break;
                         default:
-                            exit(e("Tag " . $comp["component"] . " in template not defined"));
+                            throw $this->unknownPlaceholder($comp["component"]);
                     }
                 }
                 //
@@ -2230,10 +2285,20 @@ class ExportFamilyBookData extends AbstractModule
 			 * $subject = preg_replace ( "/<(?!br>)/", "&lt;", $subject );
 			 */
         }
-        if ($doctype == "latex") {
+        if ($doctype == "latex" || $doctype == "latex_filename") {
+            // the replacements are done one after the other: braces are masked directly after the
+            // backslash, before any replacement which adds braces itself ('"{}', '\textasciitilde{}')
+            // "latex_filename" (file names, e.g. of @Portrait@) keeps the replacements of older
+            // versions: braces and "~" are valid in a path and must stay unchanged there
             $replacements = array(
                 array(
                     '/\Q\\\E/', '\textbackslash '
+                ), array(
+                    '/\Q{\E/', '\{'
+                ), array(
+                    '/\Q}\E/', '\}'
+                ), array(
+                    '/\Q~\E/', '\textasciitilde{}'
                 ), array(
                     '/\Q&\E/', '\& '
                 ), array(
@@ -2264,13 +2329,57 @@ class ExportFamilyBookData extends AbstractModule
 			),array ("/\QÜ\E/",'\"U' 
 			)*/
             );
+            if ($doctype == "latex_filename") {
+                // without the replacements of "{", "}" and "~"
+                array_splice($replacements, 1, 3);
+            }
         }
 
         foreach ($replacements as $r) {
-            $subject = preg_replace($r[0], $r[1], $subject);
+            $subject = preg_replace($r[0], $r[1], (string) $subject);
         }
 
         return $subject;
+    }
+
+    /**
+     * Mask a value of the bibliography (title or author of a source)
+     *
+     * The value is written between double quotes into the .bib file. BibTeX needs balanced braces
+     * and ends the value at a double quote outside braces; LaTeX needs its special characters masked.
+     * All characters are replaced in one pass, so nothing is masked twice.
+     *
+     * @param string $value
+     * @return string
+     */
+    private function bibtexValue(string $value): string
+    {
+        return strtr($value, array(
+            '\\' => '\textbackslash{}',
+            '{' => '\textbraceleft{}',
+            '}' => '\textbraceright{}',
+            '"' => '\textquotedbl{}',
+            '~' => '\textasciitilde{}',
+            '^' => '\textasciicircum{}',
+            '&' => '\&',
+            '%' => '\%',
+            '$' => '\$',
+            '#' => '\#',
+            '_' => '\_',
+            "\r" => '',
+            "\n" => ' ',
+        ));
+    }
+
+    /**
+     * Extension of a file name (without the dot), '' if there is none
+     *
+     * @param string $filename file name with path (also "\" as separator)
+     * @return string
+     */
+    private function fileExtension(string $filename): string
+    {
+        return pathinfo(str_replace('\\', '/', $filename), PATHINFO_EXTENSION);
     }
     /**
      * get Records for individuals and families
@@ -2321,14 +2430,15 @@ class ExportFamilyBookData extends AbstractModule
             // title
             foreach ($record->facts(['TITL']) as $fact) {
                 //foreach ($record->facts('TITL') as $fact) {
-                $ret_string .= ',title   ="' . $fact->Value() . '"';
+                $ret_string .= ',title   ="' . $this->bibtexValue($fact->Value()) . '"';
                 //$ret_string .= ',title   ="' . $fact->Value() . '"';
             }
             // author
             //foreach ($record->facts('AUTH') as $fact) {
             foreach ($record->facts(['AUTH']) as $fact) {
+                // several authors are separated by commas in webtrees and by "and" in BibTeX
                 $ret_string .= ',author   ="' .
-                    str_replace(array(',', '&'), array(' and ', '\&'), $fact->Value()) . '"';
+                    str_replace(',', ' and ', $this->bibtexValue($fact->Value())) . '"';
             }
             $ret_string .= "}";
         }
@@ -2554,7 +2664,10 @@ class ExportFamilyBookData extends AbstractModule
                 $cols = explode($sep1, $row);
                 if (sizeof($cols) > 1) {
                     if (sizeof($cols) > sizeof($seeds_default) || sizeof($cols) < 3) {
-                        throw new RuntimeException("Seed has too many or too few columns: " . $row);
+                        throw new ExportFamilyBookTemplateException(I18N::translate(
+                            'Error in the list of branches: a line has too many or too few columns: %s',
+                            $row
+                        ));
                     }
 
                     $seeds[] = $seeds_default;
@@ -2571,7 +2684,12 @@ class ExportFamilyBookData extends AbstractModule
                             } elseif (strtolower($cols[$i]) === "include") {
                                 $seeds[$key][$seeds_default_keys[$i]] = TRUE;
                             } else {
-                                exit(e("wrong value in seed column 6 value = " . $cols[$i]));
+                                throw new ExportFamilyBookTemplateException(I18N::translate(
+                                    'Error in the list of branches: the value “%1$s” is not allowed in the last column (allowed: %2$s): %3$s',
+                                    $cols[$i],
+                                    'include, exclude',
+                                    $row
+                                ));
                             }
                         } else {
                             $seeds[$key][$seeds_default_keys[$i]] = $cols[$i];
@@ -2581,7 +2699,12 @@ class ExportFamilyBookData extends AbstractModule
                     // apply some checks
                     foreach (array_keys($allowed_values) as $allowed_key) {
                         if (!in_array($seeds[$key][$allowed_key], $allowed_values[$allowed_key])) {
-                            exit(e("wrong value in seed column " . $allowed_key));
+                            throw new ExportFamilyBookTemplateException(I18N::translate(
+                                'Error in the list of branches: the direction “%1$s” is not allowed (allowed: %2$s): %3$s',
+                                $seeds[$key][$allowed_key],
+                                implode(', ', $allowed_values[$allowed_key]),
+                                $row
+                            ));
                         }
                     }
                 }
@@ -2820,7 +2943,13 @@ class ExportFamilyBookData extends AbstractModule
                         $this->generationInd[$xref]["children"]
                     );
                 } else {
-                    exit(e('Wrong seed type for ' .  $seed["name"]));
+                    // not reached: getSeeds() already checks the direction
+                    throw new ExportFamilyBookTemplateException(I18N::translate(
+                        'Error in the list of branches: the direction “%1$s” is not allowed (allowed: %2$s): %3$s',
+                        (string) $direction,
+                        'both, ancestors, descendants',
+                        (string) $seed["name"]
+                    ));
                 }
 
                 do {
@@ -3564,7 +3693,11 @@ class ExportFamilyBookData extends AbstractModule
                 if (array_key_exists($key, $fact_label)) {
                     $label = $fact_label[$key];
                 } else {
+                    // label of webtrees (the label of the settings may contain LaTeX and is not masked)
                     $label = $this->getGEDCOMTagLabel($key);
+                    if (!is_null($label)) {
+                        $label = $this->substituteSpecialCharacters($label, "latex");
+                    }
                 }
 
                 //$label = GedcomTag::getLabel($key);

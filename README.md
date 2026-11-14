@@ -284,6 +284,50 @@ When the page is opened (`<type>` is `latex` or `graphml`), the first existing s
 
 Sources 3 to 5 are alternatives: only the first existing file of them is used.
 
+## Notes on the templates
+
+### `IfExists` and `IfExist`
+
+`@FeFactType&IfExists@` and `@FeAttributeType&IfExists@` return nothing if the individual has no fact of
+this type. Both spellings work: `IfExists` (as in the help of the form) and `IfExist` (older templates).
+
+### Special characters in the LaTeX export
+
+Data from webtrees (names, places, dates, facts, notes, captions of pictures, titles and authors of sources)
+may contain characters with a special meaning in LaTeX. The export masks them, so they appear in the book as
+they are written in webtrees:
+
+| Character in webtrees | In the `.tex` file |
+|---|---|
+| `\` | `\textbackslash ` |
+| `{` `}` | `\{` `\}` |
+| `~` | `\textasciitilde{}` (prints a tilde, e.g. in `*~` or in a web address, not a space) |
+| `&` `$` `%` `_` `#` `^` `\|` `§` | `\&` `\$` `\%` `\_` `\#` `\^` `\textbar` `\§` |
+| `...` | `\ldots` |
+| `"` | `"{}` |
+| line break in a note | `\\` |
+
+In the bibliography (the `.bib` part of the file) the title and the author of a source are masked in the
+same way, with `\textbraceleft{}`/`\textbraceright{}` for braces and `\textquotedbl{}` for `"`, because
+BibTeX itself needs balanced braces and ends a value at `"`.
+
+Nothing is masked in the text of the templates, the preamble, title and epilog, the symbols, the
+relationship symbols and the names of the branches: they are LaTeX written on purpose. The name of a branch
+is therefore used unchanged as heading and for `@Link@`. File names (`@FeMediaFile@`, `@Portrait@`) keep
+`{`, `}` and `~`, because these are valid characters of a path; use `\detokenize{...}` around a path in
+`\includegraphics` as in the example template.
+
+### Errors in a template or in the list of branches
+
+A typing error in a template (a bracket that is not closed, a loop without `@EndForeach@`, a placeholder that
+does not exist) or a wrong value in the list of branches does not create a file. The page shows the form again
+with the values entered and a message that names the error.
+
+### Pictures that are skipped
+
+A link to a media object that does not exist and a media file without file extension (e.g. `photo` instead
+of `photo.jpg`) are skipped, in the export and on the page **Image selection**.
+
 ## From the exported file to a PDF
 
 ### Family book: `.tex` to PDF with TeXworks (MiKTeX)
