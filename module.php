@@ -350,7 +350,8 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 'If a later branch reaches individuals of an earlier branch, they move to the later branch. Switching a branch off does not change which branch an individual belongs to.' => 'Erreicht ein späterer Zweig Personen eines früheren Zweigs, wechseln sie in den späteren Zweig. Das Ausschalten eines Zweigs ändert nicht, zu welchem Zweig eine Person gehört.',
                 '%1$s of %2$s branches are exported.' => '%1$s von %2$s Zweigen werden exportiert.',
                 'GraphML only: embeds the portrait in the file and shows it as icon of the box' => 'Nur GraphML: bettet das Portrait in die Datei ein und zeigt es als Bild im Kasten',
-                'width in pixels (default 100) & top or left & jpg or png' => 'Breite in Pixeln (Standard 100) & top (oben) oder left (links) & jpg oder png',
+                'LaTeX only: label of the entry of the individual in the second branch (empty without @Link@)' => 'Nur LaTeX: Sprungmarke des Eintrags der Person im zweiten Zweig (leer ohne @Link@)',
+                'width in pixels (default 100) & top or left & jpg or png' =>'Breite in Pixeln (Standard 100) & top (oben) oder left (links) & jpg oder png',
                 'Error in the template: the bracket “%1$s” is not closed: %2$s' => 'Fehler im Template: Die Klammer „%1$s“ wird nicht geschlossen: %2$s',
                 'Error in the template: the loop “%1$s” has no matching %2$s: %3$s' => 'Fehler im Template: Zur Schleife „%1$s“ fehlt das passende %2$s: %3$s',
                 'Error in the template: the placeholder “%s” does not exist.' => 'Fehler im Template: Den Platzhalter „%s“ gibt es nicht.',
@@ -1000,6 +1001,12 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 'Link',
                 I18N::translate('Link to second branch with individuum'),
                 '', '@Link@'
+            ),
+            array(
+                'LinkId',
+                I18N::translate('LaTeX only: label of the entry of the individual in the second branch (empty without @Link@)'),
+                'no, gen_no or xref',
+                '\pageref{@LinkId&xref@}'
             ),
             array(
                 'Remove', '',

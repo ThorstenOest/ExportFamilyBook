@@ -79,9 +79,15 @@ class ExportFamilyBookData extends AbstractModule
     // old branch, see getRecords). Only one entry may define the label of the individual
     // (\label{@Id&xref@}), otherwise LaTeX reports "multiply defined labels" and \pageref may point
     // to the copy. $entry_xref is the individual of the entry processed, $entry_has_label is false
-    // for an entry that must not define the label (see labelEntries).
+    // for an entry that must not define the label (see labelEntries). Such an entry defines a label of
+    // its own instead ("<label of the individual>/<number of its branch>", see entryLabel), the target
+    // of @LinkId@ in the other entry. $entry_id is the key of the entry processed.
     private string $entry_xref = '';
+    private string $entry_id = '';
     private bool $entry_has_label = true;
+    // xref => key of the entry with the label of the individual; keys of the exported entries => true
+    private array $label_entries = array();
+    private array $exported_entries = array();
 
     // GraphML: portraits embedded as label icons (@PortraitIcon@, see portraitIcon)
     // pictures of the file: [base64 data, width, height], numbered from 1 (resource ids see graphmlFooter);
@@ -1704,14 +1710,6 @@ class ExportFamilyBookData extends AbstractModule
                                     }
                                     break;
                             }
-                            if (
-                                !is_null($rec) && !$this->entry_has_label && !empty($comp["in_label"]) &&
-                                $rec->xref() === $this->entry_xref
-                            ) {
-                                // label of an individual in an entry that must not define it (copy of an
-                                // individual connecting two branches): nothing, so "<\label{@Id&xref@}>" is removed
-                                $rec = null;
-                            }
                             if (!is_null($rec)) {
                                 $xref = $rec->xref();
                                 if ($this->get_format($format, 0) === "") {
@@ -1720,6 +1718,31 @@ class ExportFamilyBookData extends AbstractModule
                                     $tag_replacement = $this->generationInd[$xref][$this->get_format($format, 0)];
                                 }
                                 $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
+                                if (!$this->entry_has_label && !empty($comp["in_label"]) && $xref === $this->entry_xref) {
+                                    // label in an entry that must not define the label of the individual (copy
+                                    // of an individual connecting two branches): the label of the entry
+                                    $tag_replacement = $this->entryLabel($this->entry_id, $tag_replacement);
+                                }
+                            }
+                            break;
+                        case "LinkId":
+                            // LaTeX: label of the entry of the individual in the other branch (see @Link@),
+                            // empty if that entry is not exported
+                            if (
+                                $doctype === "latex" &&
+                                array_key_exists($ind_id, $this->generationInd) &&
+                                array_key_exists("sub_branch_link_id", $this->generationInd[$ind_id])
+                            ) {
+                                $xref = $this->generationInd[$ind_id]["xref"];
+                                $link_id = (string) $this->generationInd[$ind_id]["sub_branch_link_id"];
+                                $target = (string) $this->generationInd[$xref]["sub_branch_id"] === $link_id ? $xref : $xref . '_' . $link_id;
+                                if ($target !== (string) $ind_id && array_key_exists($target, $this->exported_entries)) {
+                                    $field = $this->get_format($format, 0) === "" ? "gen_no" : $this->get_format($format, 0);
+                                    $tag_replacement = $this->entryLabel(
+                                        $target,
+                                        $this->substituteSpecialCharacters($this->generationInd[$xref][$field], $doctype)
+                                    );
+                                }
                             }
                             break;
                         case "BirthDate":
@@ -3829,6 +3852,7 @@ class ExportFamilyBookData extends AbstractModule
     private function labelEntries(array $generationInd_tree, array $seeds): array
     {
         $entries = array();
+        $this->exported_entries = array();
         foreach ($generationInd_tree as $branch_array) {
             foreach ($branch_array as $sub_branch_id => $sub_branch_array) {
                 // the same selection of branches as in exportLatex
@@ -3838,6 +3862,7 @@ class ExportFamilyBookData extends AbstractModule
                 foreach ($sub_branch_array as $generation_array) {
                     foreach ($generation_array as $ind_id => $value) {
                         $xref = $value['xref'];
+                        $this->exported_entries[(string) $ind_id] = true;
                         if (!array_key_exists($xref, $entries) || (string) $ind_id === $xref) {
                             $entries[$xref] = (string) $ind_id;
                         }
@@ -3859,7 +3884,29 @@ class ExportFamilyBookData extends AbstractModule
     private function setLabelEntry(string $xref, $ind_id, array $label_entries): void
     {
         $this->entry_xref = $xref;
+        $this->entry_id = (string) $ind_id;
+        $this->label_entries = $label_entries;
         $this->entry_has_label = ($label_entries[$xref] ?? (string) $ind_id) === (string) $ind_id;
+    }
+
+    /**
+     * The label of an entry (LaTeX)
+     *
+     * The entry with the label of the individual (see labelEntries) has this label; another entry of
+     * the individual (copy in a second branch) has "<label of the individual>/<number of its branch>".
+     * A "/" never occurs in an XREF, so this label cannot be the label of another individual.
+     *
+     * @param string $ind_id key of the entry in generationInd
+     * @param string $label label of the individual (already masked)
+     */
+    private function entryLabel(string $ind_id, string $label): string
+    {
+        $xref = $this->generationInd[$ind_id]["xref"];
+        if (($this->label_entries[$xref] ?? $ind_id) === $ind_id) {
+            return $label;
+        }
+
+        return $label . '/' . $this->generationInd[$ind_id]["sub_branch_id"];
     }
 
     /**

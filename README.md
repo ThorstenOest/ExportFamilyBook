@@ -321,14 +321,29 @@ is therefore used unchanged as heading and for `@Link@`. File names (`@FeMediaFi
 
 An individual where one branch ends and another begins (start or stop individual of a branch, see
 [Branches](#branches)) has a full entry in both branches, with the name of the other branch for `@Link@`.
-LaTeX allows each label only once, so only one of the two entries defines the label of the individual:
+LaTeX allows each label only once, so only one of the two entries defines the label of the individual
+(the main label); the other entry gets a label of its own:
 
-- `@Id&...@` directly inside `\label{...}` returns nothing in the second entry. In the example template the
-  label is written as `<\label{@Id&xref@}>`, so the whole block is left out there.
-- The label stays with the entry in the individual's own branch (the later branch of the list). If this
-  branch is switched off, the entry in the other branch defines the label.
-- `\pageref{@Id&xref@}` therefore always points to the entry in the individual's own branch. Everything else
-  of the second entry stays as it is (number, index entry, sources, pictures).
+- The main label stays with the entry in the individual's own branch (the later branch of the list). If this
+  branch is switched off, the entry in the other branch defines it.
+- `@Id&...@` directly inside `\label{...}` returns in the second entry the main label followed by `/` and the
+  number of the branch of this entry, e.g. `\label{I12/1}`. A `/` never occurs in an XREF, so this label is
+  never the label of another individual.
+- `\pageref{@Id&xref@}` and all other references to the individual (`@FatherId@`, `@MotherId@`, `@SpouseId@`,
+  children, summary) point to the main label. Everything else of the second entry stays as it is (number,
+  index entry, sources, pictures).
+- `@LinkId@` returns the label of the entry of the individual in the other branch: in the entry with the main
+  label the label of the second entry, in the second entry the main label. Use it for a page number next to
+  `@Link@`, so the link works in both directions:
+
+      <\segoe{🔗} @Link@< S.\pageref{@LinkId&xref@}>\\ >
+
+  The format is the same as for `@Id@` (`no`, `gen_no` or `xref`; use the same as in `\label{@Id&...@}`).
+  `@LinkId@` is empty if `@Link@` is empty or the other entry is not exported, so the `<...>` block is left
+  out. It never points to a label that is not in the book (as long as the template defines
+  `\label{@Id&...@}`). In GraphML it returns nothing.
+- Limit: an individual whose copies are in several other branches links only to one of them (the last one
+  found); `@Link@` and `@LinkId@` of the entry in the own branch show this branch.
 
 Existing templates need no change. The labels of pictures (`\label{fig:@FeMediaId@}`) are not affected: with
 `@ForeachMedia&...&...&unique@` each picture is placed only once anyway.
