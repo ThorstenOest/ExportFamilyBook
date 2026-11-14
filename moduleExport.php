@@ -84,7 +84,8 @@ class ExportFamilyBookData extends AbstractModule
     private bool $entry_has_label = true;
 
     // GraphML: portraits embedded as label icons (@PortraitIcon@, see portraitIcon)
-    // resources of the file: id => base64 data; cache: key of the picture => [id, width, height]
+    // pictures of the file: [base64 data, width, height], numbered from 1 (resource ids see graphmlFooter);
+    // cache: key of the picture => [id of the icon resource, width, height]
     private array $icon_resources = array();
     private array $icon_cache = array();
     // icon of the node processed: [id, width, height, position] or null
@@ -514,8 +515,8 @@ class ExportFamilyBookData extends AbstractModule
      * Embed the portrait of an individual as icon of the node label (GraphML, @PortraitIcon@)
      *
      * yEd shows no "data:" pictures in HTML labels and keeps no paths of pictures; it stores pictures
-     * as resources in the file (<y:Resource type="java.awt.image.BufferedImage">, base64) and refers to
-     * them with iconData="..." in the node label. The picture is reduced by webtrees (as for the
+     * as resources of the file and refers to them with iconData="..." in the node label (structure as
+     * written by yEd 3.25.1, see graphmlFooter). The picture is reduced by webtrees (as for the
      * thumbnails of the web pages, incl. its cache and watermark rules) and stored as JPEG.
      *
      * Format: @PortraitIcon&width&position&type@
@@ -568,9 +569,9 @@ class ExportFamilyBookData extends AbstractModule
                     ob_start();
                     $png ? imagepng($canvas, null, 9) : imagejpeg($canvas, null, 85);
                     $encoded = (string) ob_get_clean();
-                    $id = (string) (count($this->icon_resources) + 1);
-                    $this->icon_resources[$id] = base64_encode($encoded);
-                    $this->icon_cache[$key] = array($id, $w, $h);
+                    $number = count($this->icon_resources) + 1;
+                    $this->icon_resources[$number] = array(base64_encode($encoded), $w, $h);
+                    $this->icon_cache[$key] = array($this->iconResourceId($number), $w, $h);
                 }
             } catch (Throwable $ex) {
                 // missing or unreadable file: no icon
@@ -702,10 +703,16 @@ class ExportFamilyBookData extends AbstractModule
      *
      * @return String The header of the graphml file
      */
-    private function graphmlHeader()
+    private function graphmlHeader(bool $icons = false)
     {
+        // with embedded portraits (@PortraitIcon@) all name spaces of a file written by yEd 3.25.1,
+        // the icon resources use the prefix "yed"
+        $namespaces = $icons ?
+            'xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:java="http://www.yworks.com/xml/yfiles-common/1.0/java" xmlns:sys="http://www.yworks.com/xml/yfiles-common/markup/primitives/2.0" xmlns:x="http://www.yworks.com/xml/yfiles-common/markup/2.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:y="http://www.yworks.com/xml/graphml" xmlns:yed="http://www.yworks.com/xml/yed/3"' :
+            'xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:y="http://www.yworks.com/xml/graphml"';
+
         return '<?xml version="1.0" encoding="UTF-8" standalone="no"?>' . "\n" .
-            '<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:y="http://www.yworks.com/xml/graphml" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://www.yworks.com/xml/schema/graphml/1.1/ygraphml.xsd">' .
+            '<graphml ' . $namespaces . ' xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://www.yworks.com/xml/schema/graphml/1.1/ygraphml.xsd">' .
             "\n" . '<!--Created by Webtrees -->' . "\n" .
             '<key for="graphml" id="d0" yfiles.type="resources"/>' . "\n" .
             '<key for="node" id="d1" attr.name="url" attr.type="string"/>' .
@@ -803,15 +810,64 @@ class ExportFamilyBookData extends AbstractModule
                 '</graph> </graphml>';
         }
 
-        // embedded portraits (@PortraitIcon@), base64 in lines of 76 characters as yEd writes them
+        // embedded portraits (@PortraitIcon@) as written by yEd 3.25.1: the resources are a child of
+        // <graphml> after </graph>; per picture an icon resource (referred to by iconData of the label)
+        // pointing to the picture resource (base64 in lines of 76 characters)
         $resources = '';
-        foreach ($this->icon_resources as $id => $data) {
-            $resources .= '<y:Resource id="' . $id . '" type="java.awt.image.BufferedImage">' .
+        foreach ($this->icon_resources as $number => list($data, $width, $height)) {
+            $resources .= '<y:Resource id="' . $this->iconResourceId($number) . '">' . "\n" .
+                '<yed:ScaledIcon height="' . $height . '" width="' . $width . '" xScale="1.0" yScale="1.0">' . "\n" .
+                '<yed:ImageIcon height="' . $height . '" image="' . $this->imageResourceId($number) . '" width="' . $width . '"/>' . "\n" .
+                '</yed:ScaledIcon>' . "\n" .
+                '</y:Resource>' . "\n" .
+                '<y:Resource id="' . $this->imageResourceId($number) . '" type="java.awt.image.BufferedImage" xml:space="preserve">' .
                 substr(chunk_split($data, 76, "&#13;\n"), 0, -strlen("&#13;\n")) . '</y:Resource>' . "\n";
         }
 
-        return '<data key="d0"> <y:Resources>' . "\n" . $resources . '</y:Resources> </data>' . "\n" .
-            '</graph> </graphml>';
+        return '</graph>' . "\n" .
+            '<data key="d0"> <y:Resources>' . "\n" . $resources . '</y:Resources> </data>' . "\n" .
+            '</graphml>';
+    }
+
+    /**
+     * Ids of the resources of the embedded portraits (see graphmlFooter): the icon resource of picture
+     * n has the id 2n-1, the picture resource 2n. The file has no other resources, so the ids are unique.
+     */
+    private function iconResourceId(int $number): string
+    {
+        return (string) (2 * $number - 1);
+    }
+
+    private function imageResourceId(int $number): string
+    {
+        return (string) (2 * $number);
+    }
+
+    /**
+     * Does a split template (see splitTemplate) contain the tag, also within terms and loops?
+     */
+    private function templateHasTag(array $components, string $tag): bool
+    {
+        foreach ($components as $component) {
+            if (!is_array($component)) {
+                continue;
+            }
+            if (!isset($component['type'])) {
+                // content of a loop: a list of components
+                if ($this->templateHasTag($component, $tag)) {
+                    return true;
+                }
+                continue;
+            }
+            if ($component['type'] === 'tag' && $component['component'] === $tag) {
+                return true;
+            }
+            if (is_array($component['subtemplate']) && $this->templateHasTag($component['subtemplate'], $tag)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -3434,7 +3490,12 @@ class ExportFamilyBookData extends AbstractModule
         // Get header.
         // Buffer the output. Lots of small fwrite() calls can be very
         // slow when writing large files (copied from one of the webtree modules).
-        $buffer = $this->graphmlHeader();
+        // the name spaces needed for embedded portraits only if a template asks for them, so the
+        // header of other exports stays unchanged
+        $buffer = $this->graphmlHeader(
+            $this->templateHasTag($template_ind["label"][0], "PortraitIcon") ||
+                $this->templateHasTag($template_ind["description"][0], "PortraitIcon")
+        );
 
         // get seeds
         $seeds = $this->getSeeds();

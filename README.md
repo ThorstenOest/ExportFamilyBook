@@ -337,7 +337,7 @@ Existing templates need no change. The labels of pictures (`\label{fig:@FeMediaI
 
 `@PortraitIcon@` in the label template of the individuals (GraphML) puts the portrait of the individual into
 the `.graphml` file itself. yEd shows it as the icon of the box, above or left of the text. No folder with
-pictures is needed on the computer that runs yEd.
+pictures is needed on the computer that runs yEd. Tested with yEd 3.25.1 (JPEG and PNG).
 
     @PortraitIcon&width&position&type@
 
@@ -359,7 +359,10 @@ pictures is needed on the computer that runs yEd.
   Label** in yEd (see below).
 - Why not `<img src="data:...">` in the HTML of the label: yEd draws HTML labels with Java, which does not
   load such pictures. yEd itself stores pictures as resources in the file and refers to them as label icons;
-  `@PortraitIcon@` writes them in the same way.
+  `@PortraitIcon@` writes them in the same way as yEd 3.25.1: the resources follow `</graph>`, the label
+  refers to an icon resource (`yed:ScaledIcon`), which refers to the picture resource with the image data.
+  For this the export adds the name spaces of yEd (`xmlns:yed` and others) to the start of the file. This is
+  done by the module, also for templates saved with an older version; the templates need no change.
 
 Size of the file: in a test with about 560 portraits, the file grew by 2.9 MB (about 3.6 KB per picture with
 100 pixels). The first export takes longer, because webtrees creates the reduced pictures.
