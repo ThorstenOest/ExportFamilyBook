@@ -317,6 +317,22 @@ is therefore used unchanged as heading and for `@Link@`. File names (`@FeMediaFi
 `{`, `}` and `~`, because these are valid characters of a path; use `\detokenize{...}` around a path in
 `\includegraphics` as in the example template.
 
+### Labels of individuals that connect two branches
+
+An individual where one branch ends and another begins (start or stop individual of a branch, see
+[Branches](#branches)) has a full entry in both branches, with the name of the other branch for `@Link@`.
+LaTeX allows each label only once, so only one of the two entries defines the label of the individual:
+
+- `@Id&...@` directly inside `\label{...}` returns nothing in the second entry. In the example template the
+  label is written as `<\label{@Id&xref@}>`, so the whole block is left out there.
+- The label stays with the entry in the individual's own branch (the later branch of the list). If this
+  branch is switched off, the entry in the other branch defines the label.
+- `\pageref{@Id&xref@}` therefore always points to the entry in the individual's own branch. Everything else
+  of the second entry stays as it is (number, index entry, sources, pictures).
+
+Existing templates need no change. The labels of pictures (`\label{fig:@FeMediaId@}`) are not affected: with
+`@ForeachMedia&...&...&unique@` each picture is placed only once anyway.
+
 ### Errors in a template or in the list of branches
 
 A typing error in a template (a bracket that is not closed, a loop without `@EndForeach@`, a placeholder that

@@ -75,6 +75,14 @@ class ExportFamilyBookData extends AbstractModule
     // the individual whose template is processed (used by the collection)
     private string $media_person = '';
 
+    // LaTeX: an individual connecting two branches has an entry in both branches (the "copy" in the
+    // old branch, see getRecords). Only one entry may define the label of the individual
+    // (\label{@Id&xref@}), otherwise LaTeX reports "multiply defined labels" and \pageref may point
+    // to the copy. $entry_xref is the individual of the entry processed, $entry_has_label is false
+    // for an entry that must not define the label (see labelEntries).
+    private string $entry_xref = '';
+    private bool $entry_has_label = true;
+
     /**
      * Collect the media that the LaTeX export would include, without creating the book
      *
@@ -947,6 +955,10 @@ class ExportFamilyBookData extends AbstractModule
                                     "fact" => "",
                                     "subtemplate" => ""
                                 );
+                                // @Id@ directly in "\label{": the label of the individual (see $entry_has_label)
+                                if ($component === "Id" && preg_match('/\\\\label\s*\{\s*$/', substr($template, 0, $pos))) {
+                                    $template_array[$i]["in_label"] = true;
+                                }
                             } else {
                                 $template_array[$i] = array(
                                     "component" => "Fact",
@@ -1543,6 +1555,14 @@ class ExportFamilyBookData extends AbstractModule
                                         }
                                     }
                                     break;
+                            }
+                            if (
+                                !is_null($rec) && !$this->entry_has_label && !empty($comp["in_label"]) &&
+                                $rec->xref() === $this->entry_xref
+                            ) {
+                                // label of an individual in an entry that must not define it (copy of an
+                                // individual connecting two branches): nothing, so "<\label{@Id&xref@}>" is removed
+                                $rec = null;
                             }
                             if (!is_null($rec)) {
                                 $xref = $rec->xref();
@@ -3615,6 +3635,54 @@ class ExportFamilyBookData extends AbstractModule
         $this->graphml_fwrite($gedout, $buffer);
     }
     /**
+     * The entry of each individual which defines the label of the individual
+     *
+     * An individual connecting two branches has a full entry in both (getRecords): the original in its
+     * own branch (key = xref) and a copy in the old branch (key = xref_<number of the old branch>).
+     * The label belongs to the original. If the branch of the original is not exported, the first
+     * exported copy (order of the book) defines it.
+     *
+     * @param array $generationInd_tree see getRecords
+     * @param array $seeds see getSeeds
+     * @return array<string,string> xref => key of the entry
+     */
+    private function labelEntries(array $generationInd_tree, array $seeds): array
+    {
+        $entries = array();
+        foreach ($generationInd_tree as $branch_array) {
+            foreach ($branch_array as $sub_branch_id => $sub_branch_array) {
+                // the same selection of branches as in exportLatex
+                if (!key_exists($sub_branch_id, $seeds) || !$seeds[$sub_branch_id]["include"]) {
+                    continue;
+                }
+                foreach ($sub_branch_array as $generation_array) {
+                    foreach ($generation_array as $ind_id => $value) {
+                        $xref = $value['xref'];
+                        if (!array_key_exists($xref, $entries) || (string) $ind_id === $xref) {
+                            $entries[$xref] = (string) $ind_id;
+                        }
+                    }
+                }
+            }
+        }
+
+        return $entries;
+    }
+
+    /**
+     * Set the entry which is processed next (see $entry_has_label)
+     *
+     * @param string $xref individual of the entry
+     * @param string|int $ind_id key of the entry in generationInd
+     * @param array<string,string> $label_entries see labelEntries
+     */
+    private function setLabelEntry(string $xref, $ind_id, array $label_entries): void
+    {
+        $this->entry_xref = $xref;
+        $this->entry_has_label = ($label_entries[$xref] ?? (string) $ind_id) === (string) $ind_id;
+    }
+
+    /**
      * Export the data in graphml format
      *
      * This is the main module which export the familty tree in graphml
@@ -3730,6 +3798,9 @@ class ExportFamilyBookData extends AbstractModule
         // get seeds
         $seeds = $this->getSeeds();
 
+        // the entry of each individual which defines its label
+        $label_entries = $this->labelEntries($generationInd_tree, $seeds);
+
         /*
 		 * Create nodes for individuals
 		 */
@@ -3806,6 +3877,7 @@ class ExportFamilyBookData extends AbstractModule
                                 // and the node description
 
                                 $this->media_person = $xref;
+                                $this->setLabelEntry($xref, $ind_id, $label_entries);
                                 list($nodetext, $tag_resolved) = $this->substitutePlaceHolder(
                                     $record,
                                     $record,
@@ -3881,6 +3953,7 @@ class ExportFamilyBookData extends AbstractModule
                             // and the node description
 
                             $this->media_person = $xref;
+                            $this->setLabelEntry($xref, $ind_id, $label_entries);
                             list($nodetext, $tag_resolved) = $this->substitutePlaceHolder(
                                 $record,
                                 $record,
@@ -3890,6 +3963,10 @@ class ExportFamilyBookData extends AbstractModule
                                 $brackets,
                                 $fact_symbols
                             );
+                            if (!$this->entry_has_label) {
+                                // "\label{@Id&xref@}" without "<...>" around it
+                                $nodetext = str_replace('\label{}', '', $nodetext);
+                            }
 
                             // no line break before $nodetext allowed
                             $buffer .= $nodetext  . "\n";
@@ -3904,6 +3981,8 @@ class ExportFamilyBookData extends AbstractModule
                 }
             }
         }
+
+        $this->setLabelEntry('', '', array());
 
         // add footer and write buffer
         $buffer .= $parameter["epilog"];
