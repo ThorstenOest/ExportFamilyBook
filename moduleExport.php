@@ -90,8 +90,9 @@ class ExportFamilyBookData extends AbstractModule
     private array $exported_entries = array();
 
     // GraphML: portraits embedded as label icons (@PortraitIcon@, see portraitIcon)
-    // pictures of the file: [base64 data, width, height], numbered from 1 (resource ids see graphmlFooter);
-    // cache: key of the picture => [id of the icon resource, width, height]
+    // pictures of the file: [base64 data, pixel width, pixel height, shown width, shown height, scale],
+    // numbered from 1 (resource ids see graphmlFooter);
+    // cache: key of the picture => [id of the icon resource, shown width, shown height]
     private array $icon_resources = array();
     private array $icon_cache = array();
     // icon of the node processed: [id, width, height, position] or null
@@ -525,17 +526,21 @@ class ExportFamilyBookData extends AbstractModule
      * written by yEd 3.25.1, see graphmlFooter). The picture is reduced by webtrees (as for the
      * thumbnails of the web pages, incl. its cache and watermark rules) and stored as JPEG.
      *
-     * Format: @PortraitIcon&width&position&type@
-     *   width     width in pixels (default 100); yEd shows the icon in this size
-     *   position  "top" (default: picture above the text) or "left" (picture left of the text)
-     *   type      "jpg" (default, quality 85) or "png"
+     * Format: @PortraitIcon&width&position&type&sharpness@
+     *   width      width in pixels (default 100); yEd shows the icon in this size
+     *   position   "top" (default: picture above the text) or "left" (picture left of the text)
+     *   type       "jpg" (default, quality 85) or "png"
+     *   sharpness  1 to 4 (default 2; other values: default): the picture is stored with sharpness times
+     *              the pixels and shown in the same size (yed:ScaledIcon with the scale 1/sharpness), so it
+     *              stays sharp when zooming or printing. It is never enlarged beyond the original: a smaller
+     *              original is stored in its own size and scaled to the shown size.
      *
      * Nothing is embedded if the individual has no highlighted image, if the current user may not see
      * the media object, or if the file is missing or cannot be read.
      *
      * @param Individual $record
      * @param array $format
-     * @return array{0: string, 1: int, 2: int, 3: string}|null resource id, width, height, position
+     * @return array{0: string, 1: int, 2: int, 3: string}|null resource id, shown width, shown height, position
      */
     private function portraitIcon(Individual $record, array $format): ?array
     {
@@ -545,38 +550,48 @@ class ExportFamilyBookData extends AbstractModule
         }
         $position = $this->get_format($format, 1) === "left" ? "left" : "top";
         $png = strtolower($this->get_format($format, 2)) === "png";
+        $sharpness = trim($this->get_format($format, 3));
+        $sharpness = preg_match('/^[1-4]$/', $sharpness) === 1 ? (int) $sharpness : 2;
 
         $media_file = $record->findHighlightedMediaFile();
         if ($media_file === null || $media_file->isExternal() || !$media_file->media()->canShow()) {
             return null;
         }
 
-        $key = $media_file->media()->xref() . '|' . $media_file->filename() . '|' . $width . '|' . (int) $png;
+        $key = $media_file->media()->xref() . '|' . $media_file->filename() . '|' . $width . '|' . (int) $png . '|' . $sharpness;
         if (!array_key_exists($key, $this->icon_cache)) {
             $this->icon_cache[$key] = null;
             try {
-                $factory = Registry::imageFactory();
-                // a portrait higher than 1.5 times its width is reduced to this height
-                $data = $factory->mediaFileThumbnail(
-                    $media_file,
-                    $width,
-                    (int) round($width * 1.5),
-                    'contain',
-                    $factory->thumbnailNeedsWatermark($media_file, Auth::user())
-                );
-                $image = @imagecreatefromstring($data);
-                if ($image !== false) {
-                    $w = imagesx($image);
-                    $h = imagesy($image);
-                    // transparent parts (PNG, GIF) become white
-                    $canvas = imagecreatetruecolor($w, $h);
-                    imagefill($canvas, 0, 0, imagecolorallocate($canvas, 255, 255, 255));
-                    imagecopy($canvas, $image, 0, 0, 0, 0, $w, $h);
+                // shown size: a portrait higher than 1.5 times its width is reduced to this height
+                $height = (int) round($width * 1.5);
+                $shown = $this->portraitThumbnail($media_file, $width, $height);
+                if ($shown !== null) {
+                    $stored = $shown;
+                    $scale = 1.0;
+                    $original = $sharpness > 1 ? $this->originalImageSize($media_file) : null;
+                    // only an original larger than the shown size gives more pixels
+                    if ($original !== null && ($original[0] > imagesx($shown) || $original[1] > imagesy($shown))) {
+                        $fit = min($width / $original[0], $height / $original[1]);
+                        if ($fit * $sharpness >= 1) {
+                            // never enlarged: the original in its own size, scaled to the shown size
+                            $stored = $this->portraitThumbnail($media_file, $original[0], $original[1]);
+                            $scale = $fit;
+                        } else {
+                            $stored = $this->portraitThumbnail($media_file, $width * $sharpness, (int) round($width * $sharpness * 1.5));
+                            $scale = 1 / $sharpness;
+                        }
+                        if ($stored === null) {
+                            $stored = $shown;
+                            $scale = 1.0;
+                        }
+                    }
+                    $w = imagesx($shown);
+                    $h = imagesy($shown);
                     ob_start();
-                    $png ? imagepng($canvas, null, 9) : imagejpeg($canvas, null, 85);
+                    $png ? imagepng($stored, null, 9) : imagejpeg($stored, null, 85);
                     $encoded = (string) ob_get_clean();
                     $number = count($this->icon_resources) + 1;
-                    $this->icon_resources[$number] = array(base64_encode($encoded), $w, $h);
+                    $this->icon_resources[$number] = array(base64_encode($encoded), imagesx($stored), imagesy($stored), $w, $h, $scale);
                     $this->icon_cache[$key] = array($this->iconResourceId($number), $w, $h);
                 }
             } catch (Throwable $ex) {
@@ -588,6 +603,64 @@ class ExportFamilyBookData extends AbstractModule
         }
 
         return array($this->icon_cache[$key][0], $this->icon_cache[$key][1], $this->icon_cache[$key][2], $position);
+    }
+
+    /**
+     * Picture of a media file reduced (or enlarged) by webtrees to fit into width x height (as for the
+     * thumbnails of the web pages, incl. its cache and watermark rules); transparent parts become white
+     *
+     * @return \GdImage|null
+     */
+    private function portraitThumbnail(\Fisharebest\Webtrees\MediaFile $media_file, int $width, int $height): ?\GdImage
+    {
+        $factory = Registry::imageFactory();
+        $data = $factory->mediaFileThumbnail(
+            $media_file,
+            $width,
+            $height,
+            'contain',
+            $factory->thumbnailNeedsWatermark($media_file, Auth::user())
+        );
+        $image = @imagecreatefromstring($data);
+        if ($image === false) {
+            return null;
+        }
+        $w = imagesx($image);
+        $h = imagesy($image);
+        $canvas = imagecreatetruecolor($w, $h);
+        imagefill($canvas, 0, 0, imagecolorallocate($canvas, 255, 255, 255));
+        imagecopy($canvas, $image, 0, 0, 0, 0, $w, $h);
+
+        return $canvas;
+    }
+
+    /**
+     * Size of the original picture of a media file as webtrees shows it (EXIF orientation applied)
+     *
+     * @return array{0: int, 1: int}|null width, height
+     */
+    private function originalImageSize(\Fisharebest\Webtrees\MediaFile $media_file): ?array
+    {
+        try {
+            $filesystem = $media_file->media()->tree()->mediaFilesystem();
+            $data = $filesystem->read($media_file->filename());
+        } catch (Throwable $ex) {
+            return null;
+        }
+        $size = @getimagesizefromstring($data);
+        if ($size === false || $size[0] < 1 || $size[1] < 1) {
+            return null;
+        }
+        list($w, $h) = $size;
+        if (function_exists('exif_read_data') && ($size[2] ?? 0) === IMAGETYPE_JPEG) {
+            $exif = @exif_read_data('data://image/jpeg;base64,' . base64_encode($data));
+            // orientations 5 to 8: the picture is turned by 90 degrees
+            if (is_array($exif) && in_array((int) ($exif['Orientation'] ?? 1), array(5, 6, 7, 8), true)) {
+                list($w, $h) = array($h, $w);
+            }
+        }
+
+        return array($w, $h);
     }
 
     /**
@@ -818,11 +891,15 @@ class ExportFamilyBookData extends AbstractModule
 
         // embedded portraits (@PortraitIcon@) as written by yEd 3.25.1: the resources are a child of
         // <graphml> after </graph>; per picture an icon resource (referred to by iconData of the label)
-        // pointing to the picture resource (base64 in lines of 76 characters)
+        // pointing to the picture resource (base64 in lines of 76 characters); yed:ScaledIcon has the
+        // shown size and the scale, yed:ImageIcon the size of the picture in pixels
         $resources = '';
-        foreach ($this->icon_resources as $number => list($data, $width, $height)) {
+        foreach ($this->icon_resources as $number => list($data, $width, $height, $shown_width, $shown_height, $scale)) {
+            // scale with a point as decimal separator (independent of the locale), e.g. "1.0", "0.5"
+            $scale = rtrim(rtrim(sprintf('%.6F', $scale), '0'), '.');
+            $scale .= str_contains($scale, '.') ? '' : '.0';
             $resources .= '<y:Resource id="' . $this->iconResourceId($number) . '">' . "\n" .
-                '<yed:ScaledIcon height="' . $height . '" width="' . $width . '" xScale="1.0" yScale="1.0">' . "\n" .
+                '<yed:ScaledIcon height="' . $shown_height . '" width="' . $shown_width . '" xScale="' . $scale . '" yScale="' . $scale . '">' . "\n" .
                 '<yed:ImageIcon height="' . $height . '" image="' . $this->imageResourceId($number) . '" width="' . $width . '"/>' . "\n" .
                 '</yed:ScaledIcon>' . "\n" .
                 '</y:Resource>' . "\n" .

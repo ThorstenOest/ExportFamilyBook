@@ -354,19 +354,25 @@ Existing templates need no change. The labels of pictures (`\label{fig:@FeMediaI
 the `.graphml` file itself. yEd shows it as the icon of the box, above or left of the text. No folder with
 pictures is needed on the computer that runs yEd. Tested with yEd 3.25.1 (JPEG and PNG).
 
-    @PortraitIcon&width&position&type@
+    @PortraitIcon&width&position&type&sharpness@
 
 | Part | Values | Default |
 |---|---|---|
 | width | width of the picture in pixels; yEd shows it in this size | `100` |
 | position | `top` (picture above the text) or `left` (picture left of the text) | `top` |
 | type | `jpg` (quality 85) or `png` (larger files) | `jpg` |
+| sharpness | `1` to `4`: the picture is stored with this many times the pixels of the width (other values: the default) | `2` |
 
 - The portrait is the highlighted image of the individual in webtrees. webtrees reduces it like the thumbnails
   of its web pages (and keeps the reduced pictures in its cache, so the next export is faster). A picture
   higher than 1.5 times its width is reduced to this height.
 - Only pictures the user may see in webtrees are embedded. Individuals without portrait, with a missing or
   unreadable file or with an external picture (a web address) get no picture; there is no silhouette.
+- Sharpness: with `2` a picture shown 100 pixels wide is stored 200 pixels wide and shown in half its size,
+  so it stays sharp when zooming in yEd and in a printed or PDF chart. The size in the box and the size of
+  the box are the same for every sharpness. A picture is never enlarged beyond its original: an original
+  narrower than width × sharpness is stored in its own size and scaled to the width. `1` gives the output
+  of earlier versions.
 - A picture used by several boxes is embedded only once.
 - The placeholder returns no text, its place in the template does not matter. In the LaTeX export it returns
   nothing.
@@ -375,12 +381,15 @@ pictures is needed on the computer that runs yEd. Tested with yEd 3.25.1 (JPEG a
 - Why not `<img src="data:...">` in the HTML of the label: yEd draws HTML labels with Java, which does not
   load such pictures. yEd itself stores pictures as resources in the file and refers to them as label icons;
   `@PortraitIcon@` writes them in the same way as yEd 3.25.1: the resources follow `</graph>`, the label
-  refers to an icon resource (`yed:ScaledIcon`), which refers to the picture resource with the image data.
+  refers to an icon resource (`yed:ScaledIcon` with the shown size and the scale `1/sharpness`), which refers
+  to the picture resource with the image data (`yed:ImageIcon` with the size in pixels).
   For this the export adds the name spaces of yEd (`xmlns:yed` and others) to the start of the file. This is
   done by the module, also for templates saved with an older version; the templates need no change.
 
-Size of the file: in a test with about 560 portraits, the file grew by 2.9 MB (about 3.6 KB per picture with
-100 pixels). The first export takes longer, because webtrees creates the reduced pictures.
+Size of the file: in a test with 538 different portraits shown 100 pixels wide (JPEG), the file grew by
+3.1 MB with sharpness 1 (about 5.7 KB per picture), 7.1 MB with sharpness 2 (about 13 KB) and 11.5 MB with
+sharpness 3 (about 21 KB). For very large charts, `1` keeps the file small.
+The first export takes longer, because webtrees creates the reduced pictures.
 
 How to change an existing template that uses picture files:
 
