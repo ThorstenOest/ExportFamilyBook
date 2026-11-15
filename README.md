@@ -361,7 +361,7 @@ pictures is needed on the computer that runs yEd. Tested with yEd 3.25.1 (JPEG a
 | width | width of the picture in pixels; yEd shows it in this size | `100` |
 | position | `top` (picture above the text) or `left` (picture left of the text) | `top` |
 | type | `jpg` (quality 92) or `png` (lossless, larger files) | `jpg` |
-| sharpness | `1` to `10`: the picture is stored with this many times the pixels of the width (other values: the default) | `2` |
+| sharpness | `1` to `10`: the picture is stored with this many times the pixels of the width (other values: the default) | `8` |
 
 - The portrait is the highlighted image of the individual in webtrees. The module reduces the original file
   (turned as given by its EXIF orientation) and encodes it once, JPEG with quality 92 or lossless PNG.
@@ -377,9 +377,12 @@ pictures is needed on the computer that runs yEd. Tested with yEd 3.25.1 (JPEG a
   the box are the same for every sharpness. A picture is never enlarged beyond its original: an original
   narrower than width × sharpness is stored in its own size and scaled to the width, so a small original
   limits the sharpness. An original smaller than the shown size is enlarged to it, as before.
-- A small picture left of the text needs a high sharpness, e.g. `@PortraitIcon&30&left&jpg&8@`: shown 30 pixels
-  wide, stored 240 pixels wide. The size of the file depends on width × sharpness (the stored pixels), not on
-  the sharpness alone; see the sizes measured below.
+- The default sharpness `8` is made for small pictures left of the text, e.g. `@PortraitIcon&30&left@`
+  (the same as `@PortraitIcon&30&left&jpg&8@`): shown 30 pixels wide, stored 240 pixels wide.
+- **The size of the file depends on width × sharpness** (the stored pixels), not on the sharpness alone. With
+  the default sharpness `8` and the default width `100`, up to 800 pixels are stored per picture
+  (`@PortraitIcon@`: about 85 KB per picture, see below). For wide pictures choose a smaller sharpness,
+  e.g. `@PortraitIcon&100&top&jpg&3@` (300 pixels, as in the example template).
 - A picture used by several boxes is embedded only once.
 - The placeholder returns no text, its place in the template does not matter. In the LaTeX export it returns
   nothing.
@@ -402,6 +405,7 @@ grew by
 | 2 | 10.3 MB | about 19 KB |
 | 3 | 17.0 MB | about 32 KB |
 | 4 | 23.6 MB | about 44 KB |
+| 8 (default) | 45.9 MB | about 85 KB |
 
 Pictures shown 30 pixels wide left of the text (`@PortraitIcon&30&left&jpg&...@`, same test):
 
@@ -411,7 +415,7 @@ Pictures shown 30 pixels wide left of the text (`@PortraitIcon&30&left&jpg&...@`
 | 8 | 240 pixels | 12.9 MB | about 24 KB |
 | 10 | 300 pixels | 17.0 MB | about 32 KB |
 
-For very large charts, `1` keeps the file small. In this test the first export took 14 to 23 seconds
+For very large charts, `1` to `3` keep the file small. In this test the first export took 14 to 23 seconds
 (the module reduces the originals), the next one 8 to 9 seconds (pictures from the cache; the same export
 without pictures: about 9 seconds).
 
@@ -419,8 +423,9 @@ How to change an existing template that uses picture files:
 
 1. Remove the part with the picture, for example
    `{<td width="33"><img src="file:/path/to/thumbs/@Portrait@" ... height="@PortraitSize&w30@"></td>}`.
-2. Write `@PortraitIcon&100&left@` (picture left of the text, as in the old table) or `@PortraitIcon@`
-   (picture above the text) anywhere in the template, e.g. directly after the first line `{}@&`.
+2. Write `@PortraitIcon&100&left&jpg&3@` (picture left of the text, as in the old table) or
+   `@PortraitIcon&100&top&jpg&3@` (picture above the text) anywhere in the template, e.g. directly after the
+   first line `{}@&`.
 3. If the box is too narrow for picture and text, increase the width of the boxes in the form.
 
 Templates that keep `@Portrait@` with a path work as before.

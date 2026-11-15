@@ -351,7 +351,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 '%1$s of %2$s branches are exported.' => '%1$s von %2$s Zweigen werden exportiert.',
                 'GraphML only: embeds the portrait in the file and shows it as icon of the box' => 'Nur GraphML: bettet das Portrait in die Datei ein und zeigt es als Bild im Kasten',
                 'LaTeX only: label of the entry of the individual in the second branch (empty without @Link@)' => 'Nur LaTeX: Sprungmarke des Eintrags der Person im zweiten Zweig (leer ohne @Link@)',
-                'width in pixels (default 100) & top or left & jpg or png & sharpness 1 to 10 (default 2)' =>'Breite in Pixeln (Standard 100) & top (oben) oder left (links) & jpg oder png & Schärfe 1 bis 10 (Standard 2)',
+                'width in pixels (default 100) & top or left & jpg or png & sharpness 1 to 10 (default 8)' =>'Breite in Pixeln (Standard 100) & top (oben) oder left (links) & jpg oder png & Schärfe 1 bis 10 (Standard 8)',
                 'Error in the template: the bracket “%1$s” is not closed: %2$s' => 'Fehler im Template: Die Klammer „%1$s“ wird nicht geschlossen: %2$s',
                 'Error in the template: the loop “%1$s” has no matching %2$s: %3$s' => 'Fehler im Template: Zur Schleife „%1$s“ fehlt das passende %2$s: %3$s',
                 'Error in the template: the placeholder “%s” does not exist.' => 'Fehler im Template: Den Platzhalter „%s“ gibt es nicht.',
@@ -988,8 +988,8 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             array(
                 'PortraitIcon',
                 I18N::translate('GraphML only: embeds the portrait in the file and shows it as icon of the box'),
-                I18N::translate('width in pixels (default 100) & top or left & jpg or png & sharpness 1 to 10 (default 2)'),
-                '@PortraitIcon&100&top&jpg&2@'
+                I18N::translate('width in pixels (default 100) & top or left & jpg or png & sharpness 1 to 10 (default 8)'),
+                '@PortraitIcon&30&left&jpg&8@'
             ),
             array('Gedcom', '', '-', '@Gedcom@'),
             array(

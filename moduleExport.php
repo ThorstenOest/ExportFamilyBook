@@ -534,7 +534,7 @@ class ExportFamilyBookData extends AbstractModule
      *   width      width in pixels (default 100); yEd shows the icon in this size
      *   position   "top" (default: picture above the text) or "left" (picture left of the text)
      *   type       "jpg" (default, quality 92) or "png"
-     *   sharpness  1 to 10 (default 2; other values: default): the picture is stored with sharpness times
+     *   sharpness  1 to 10 (default 8; other values: default): the picture is stored with sharpness times
      *              the pixels and shown in the same size (yed:ScaledIcon with the scale 1/sharpness), so it
      *              stays sharp when zooming or printing. It is never enlarged beyond the original: a smaller
      *              original is stored in its own size and scaled to the shown size.
@@ -555,7 +555,7 @@ class ExportFamilyBookData extends AbstractModule
         $position = $this->get_format($format, 1) === "left" ? "left" : "top";
         $png = strtolower($this->get_format($format, 2)) === "png";
         $sharpness = trim($this->get_format($format, 3));
-        $sharpness = preg_match('/^([1-9]|10)$/', $sharpness) === 1 ? (int) $sharpness : 2;
+        $sharpness = preg_match('/^([1-9]|10)$/', $sharpness) === 1 ? (int) $sharpness : 8;
 
         $media_file = $record->findHighlightedMediaFile();
         if ($media_file === null || $media_file->isExternal() || !$media_file->media()->canShow()) {
