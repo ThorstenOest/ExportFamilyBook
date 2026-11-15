@@ -354,19 +354,35 @@ Existing templates need no change. The labels of pictures (`\label{fig:@FeMediaI
 the `.graphml` file itself. yEd shows it as the icon of the box, above or left of the text. No folder with
 pictures is needed on the computer that runs yEd. Tested with yEd 3.25.1 (JPEG and PNG).
 
-    @PortraitIcon&width&position&type@
+    @PortraitIcon&width&position&type&sharpness@
 
 | Part | Values | Default |
 |---|---|---|
 | width | width of the picture in pixels; yEd shows it in this size | `100` |
 | position | `top` (picture above the text) or `left` (picture left of the text) | `top` |
-| type | `jpg` (quality 85) or `png` (larger files) | `jpg` |
+| type | `jpg` (quality 92) or `png` (lossless, larger files) | `jpg` |
+| sharpness | `1` to `10`: the picture is stored with this many times the pixels of the width (other values: the default) | `8` |
 
-- The portrait is the highlighted image of the individual in webtrees. webtrees reduces it like the thumbnails
-  of its web pages (and keeps the reduced pictures in its cache, so the next export is faster). A picture
-  higher than 1.5 times its width is reduced to this height.
+- The portrait is the highlighted image of the individual in webtrees. The module reduces the original file
+  (turned as given by its EXIF orientation) and encodes it once, JPEG with quality 92 or lossless PNG.
+  A picture higher than 1.5 times its width is reduced to this height.
+- The reduced pictures are kept in the cache of webtrees (`data/cache/`, like the thumbnails of the web
+  pages), so the next export is faster. A changed file (time of change or size) gives a new picture.
+- If webtrees shows the pictures with a watermark for the user who exports, the module uses the
+  watermarked thumbnails of webtrees instead (encoded again, so with somewhat lower quality).
 - Only pictures the user may see in webtrees are embedded. Individuals without portrait, with a missing or
   unreadable file or with an external picture (a web address) get no picture; there is no silhouette.
+- Sharpness: with `2` a picture shown 100 pixels wide is stored 200 pixels wide and shown in half its size,
+  so it stays sharp when zooming in yEd and in a printed or PDF chart. The size in the box and the size of
+  the box are the same for every sharpness. A picture is never enlarged beyond its original: an original
+  narrower than width × sharpness is stored in its own size and scaled to the width, so a small original
+  limits the sharpness. An original smaller than the shown size is enlarged to it, as before.
+- The default sharpness `8` is made for small pictures left of the text, e.g. `@PortraitIcon&30&left@`
+  (the same as `@PortraitIcon&30&left&jpg&8@`): shown 30 pixels wide, stored 240 pixels wide.
+- **The size of the file depends on width × sharpness** (the stored pixels), not on the sharpness alone. With
+  the default sharpness `8` and the default width `100`, up to 800 pixels are stored per picture
+  (`@PortraitIcon@`: about 85 KB per picture, see below). For wide pictures choose a smaller sharpness,
+  e.g. `@PortraitIcon&100&top&jpg&3@` (300 pixels, as in the example template).
 - A picture used by several boxes is embedded only once.
 - The placeholder returns no text, its place in the template does not matter. In the LaTeX export it returns
   nothing.
@@ -375,19 +391,41 @@ pictures is needed on the computer that runs yEd. Tested with yEd 3.25.1 (JPEG a
 - Why not `<img src="data:...">` in the HTML of the label: yEd draws HTML labels with Java, which does not
   load such pictures. yEd itself stores pictures as resources in the file and refers to them as label icons;
   `@PortraitIcon@` writes them in the same way as yEd 3.25.1: the resources follow `</graph>`, the label
-  refers to an icon resource (`yed:ScaledIcon`), which refers to the picture resource with the image data.
+  refers to an icon resource (`yed:ScaledIcon` with the shown size and the scale `1/sharpness`), which refers
+  to the picture resource with the image data (`yed:ImageIcon` with the size in pixels).
   For this the export adds the name spaces of yEd (`xmlns:yed` and others) to the start of the file. This is
   done by the module, also for templates saved with an older version; the templates need no change.
 
-Size of the file: in a test with about 560 portraits, the file grew by 2.9 MB (about 3.6 KB per picture with
-100 pixels). The first export takes longer, because webtrees creates the reduced pictures.
+Size of the file: in a test with 538 different portraits shown 100 pixels wide (JPEG, quality 92), the file
+grew by
+
+| sharpness | growth of the file | per picture |
+|---|---|---|
+| 1 | 4.3 MB | about 8 KB |
+| 2 | 10.3 MB | about 19 KB |
+| 3 | 17.0 MB | about 32 KB |
+| 4 | 23.6 MB | about 44 KB |
+| 8 (default) | 45.9 MB | about 85 KB |
+
+Pictures shown 30 pixels wide left of the text (`@PortraitIcon&30&left&jpg&...@`, same test):
+
+| sharpness | stored width | growth of the file | per picture |
+|---|---|---|---|
+| 4 | 120 pixels | 5.2 MB | about 10 KB |
+| 8 | 240 pixels | 12.9 MB | about 24 KB |
+| 10 | 300 pixels | 17.0 MB | about 32 KB |
+
+For very large charts, `1` to `3` keep the file small. In this test the first export took 14 to 23 seconds
+(the module reduces the originals), the next one 8 to 9 seconds (pictures from the cache; the same export
+without pictures: about 9 seconds).
 
 How to change an existing template that uses picture files:
 
 1. Remove the part with the picture, for example
    `{<td width="33"><img src="file:/path/to/thumbs/@Portrait@" ... height="@PortraitSize&w30@"></td>}`.
-2. Write `@PortraitIcon&100&left@` (picture left of the text, as in the old table) or `@PortraitIcon@`
-   (picture above the text) anywhere in the template, e.g. directly after the first line `{}@&`.
+2. Write `@PortraitIcon&100&left&jpg&3@` (picture left of the text, as in the old table) or
+   `@PortraitIcon&100&top&jpg&3@` (picture above the text) anywhere in the template, e.g. directly after the
+   first line `{}@&`.
 3. If the box is too narrow for picture and text, increase the width of the boxes in the form.
 
 Templates that keep `@Portrait@` with a path work as before.
