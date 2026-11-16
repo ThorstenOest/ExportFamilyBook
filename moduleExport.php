@@ -3735,7 +3735,9 @@ class ExportFamilyBookData extends AbstractModule
                 $settings[$field . '_marriage'] = $settings[$field . '_family'];
             }
         }
-        foreach (array('node_style_marriage' => 'rectangle', 'box_width_marriage' => '', 'box_height_marriage' => '') as $field => $default) {
+        foreach (array(
+            'node_style_marriage' => 'rectangle', 'box_width_marriage' => '', 'box_height_marriage' => '', 'size_marriage' => 'export',
+        ) as $field => $default) {
             if (!array_key_exists($field, $settings)) {
                 $settings[$field] = $default;
             }
@@ -3775,14 +3777,79 @@ class ExportFamilyBookData extends AbstractModule
     }
 
     /**
+     * Width of characters relative to the font size (em) for the fonts of the form (GraphML)
+     *
+     * Classes: n narrow (space . , : ; ( ) [ ] - / i j l t f r I ! ...), d digits and other signs, l lower
+     * case letters, u upper case letters, w wide letters (m w M W), s symbols (from U+2000, e.g. ⚭ †, which
+     * are mostly shown in an own font). Measured with the Java of yEd 3.25.1 (Swing, as yEd draws HTML
+     * labels) for font sizes 6 to 14; a font not in the list uses the widest value of each class.
+     * "line" is the line height relative to the font size.
+     */
+    private const FAMILY_FONT_METRICS = array(
+        'Times New Roman' => array('n' => 0.30, 'd' => 0.52, 'l' => 0.46, 'u' => 0.66, 'w' => 0.88, 's' => 0.85, 'line' => 1.3),
+        'Dialog' => array('n' => 0.28, 'd' => 0.56, 'l' => 0.55, 'u' => 0.69, 'w' => 0.83, 's' => 0.85, 'line' => 1.3),
+        'Franklin Gothic Book' => array('n' => 0.28, 'd' => 0.58, 'l' => 0.52, 'u' => 0.58, 'w' => 0.80, 's' => 0.85, 'line' => 1.3),
+        'Bookman Old Style' => array('n' => 0.35, 'd' => 0.62, 'l' => 0.60, 'u' => 0.71, 'w' => 0.94, 's' => 0.85, 'line' => 1.3),
+        'Lucida Handwriting' => array('n' => 0.42, 'd' => 0.64, 'l' => 0.68, 'u' => 0.75, 'w' => 0.98, 's' => 0.85, 'line' => 1.45),
+    );
+
+    /**
+     * Estimated width of a line of text in a family node (GraphML)
+     *
+     * The sum of the widths of the characters by class (see FAMILY_FONT_METRICS) with 8 % and 1 point
+     * added, so the text is rather a few points too wide than cut off: compared with the width yEd uses
+     * for 412 labels in the 5 fonts and 8 font sizes, no estimate was too small, on average 13 % too
+     * large.
+     *
+     * @param string $line text without HTML (see familyLabelLines)
+     * @param array<string,float> $metrics widths of the classes (see FAMILY_FONT_METRICS)
+     * @param float $font_size
+     * @return float
+     */
+    private function familyTextWidth(string $line, array $metrics, float $font_size): float
+    {
+        $em = 0.0;
+        foreach (preg_split('//u', $line, -1, PREG_SPLIT_NO_EMPTY) as $char) {
+            if (preg_match('~^[\s.,:;\'!|()\[\]/"`\x{00A0}ijltfrI-]$~u', $char) === 1) {
+                $em += $metrics['n'];
+            } elseif (preg_match('~^[mwMW]$~', $char) === 1) {
+                $em += $metrics['w'];
+            } elseif (preg_match('~^\p{Lu}$~u', $char) === 1) {
+                $em += $metrics['u'];
+            } elseif (preg_match('~^\p{Ll}$~u', $char) === 1) {
+                $em += $metrics['l'];
+            } elseif (mb_ord($char) >= 0x2000) {
+                $em += $metrics['s'];
+            } else {
+                $em += $metrics['d'];
+            }
+        }
+
+        return $em * $font_size * 1.08 + 1;
+    }
+
+    /**
      * The shape of a family node with marriage information (GraphML, see exportGraphml)
      *
-     * The node is as large as the text: estimated from the longest line, the number of lines and the font
-     * size, with a margin; a width or height set in the form is used instead. The label has the same size
-     * as the node (autoSizePolicy "node_size") and covers it with the fill and border colour of the form,
-     * so the edges end at the border of the box. The node keeps the black fill, by which the layout
-     * "Family Tree" of yEd finds the family nodes. The shape of the form is the shape of the node under
-     * the label: it decides where the edges end; "rectangle" ends them exactly at the border of the box.
+     * The node is as large as the text: estimated from the widths of the characters of the longest line
+     * in the font of the form (see familyTextWidth), the number of lines and the font size, with a margin;
+     * a width or height set in the form is used instead. The label has the same size as the node
+     * (autoSizePolicy "node_size") and covers it with the fill and border colour of the form, so the edges
+     * end at the border of the box. The node keeps the black fill, by which the layout "Family Tree" of
+     * yEd finds the family nodes. The shape of the form is the shape of the node under the label: it
+     * decides where the edges end; "rectangle" ends them exactly at the border of the box.
+     *
+     * Centring: yEd draws an HTML label as a Swing label as large as the box less 2 points on each side,
+     * with the content at the left and in the middle vertically; alignment="center" does not move it.
+     * So the content of an HTML label is put into a table as wide as this area with one centred cell
+     * without line breaks; this centres it horizontally, also if the estimate is a bit too large. A label
+     * without HTML is centred horizontally by yEd itself (alignment="center").
+     *
+     * Size "fitted in yEd" (size_marriage "yed"): the content is not put into the table, because "Fit Node to
+     * Label" of yEd measures the content of a label with autoSizePolicy "node_size" (a copy of the label with
+     * the size of its content) and would keep the width of the table. The estimated size is the size until
+     * the node is fitted in yEd; after fitting, the box is as large as the text plus the inner margin and the
+     * space of the dialog, so the text is in the middle (1 point difference with a space of 1).
      *
      * @param array $parameter settings of the form (see familyNodeSettings)
      * @param array<string> $lines lines of text of the label (see familyLabelLines)
@@ -3793,14 +3860,34 @@ class ExportFamilyBookData extends AbstractModule
     {
         $font_size = is_numeric($parameter['font_size_marriage']) && (float) $parameter['font_size_marriage'] > 0
             ? (float) $parameter['font_size_marriage'] : 10.0;
-        $chars = 0;
-        foreach ($lines as $line) {
-            $chars = max($chars, mb_strlen($line));
+        $metrics = self::FAMILY_FONT_METRICS[$parameter['font']] ?? null;
+        if ($metrics === null) {
+            // font not in the form: the widest value of each class
+            $metrics = array();
+            foreach (self::FAMILY_FONT_METRICS as $font_metrics) {
+                foreach ($font_metrics as $class => $value) {
+                    $metrics[$class] = max($metrics[$class] ?? 0.0, $value);
+                }
+            }
         }
+        $text_width = 0.0;
+        foreach ($lines as $line) {
+            $text_width = max($text_width, $this->familyTextWidth($line, $metrics, $font_size));
+        }
+        // 2 points inner margin of the label on each side and 1 point between text and border
         $width = $parameter['box_width_marriage'];
-        $width = is_numeric($width) && (float) $width > 0 ? (float) $width : ceil($chars * $font_size * 0.6) + 8;
+        $width = is_numeric($width) && (float) $width > 0 ? (float) $width : ceil($text_width) + 6;
         $height = $parameter['box_height_marriage'];
-        $height = is_numeric($height) && (float) $height > 0 ? (float) $height : ceil(count($lines) * $font_size * 1.3) + 6;
+        $height = is_numeric($height) && (float) $height > 0 ? (float) $height
+            : ceil(count($lines) * $font_size * $metrics['line']) + 6;
+
+        // HTML label: the content in a centred table cell as wide as the label less its inner margins
+        if ($parameter['size_marriage'] !== 'yed'
+            && preg_match('~^(\s*&lt;html&gt;)(.*?)(&lt;/html&gt;\s*)?$~is', $label, $match) === 1) {
+            $label = $match[1] . '&lt;table width="' . max(1, (int) floor($width - 4)) .
+                '" cellpadding="0" cellspacing="0"&gt;&lt;tr&gt;&lt;td align="center" nowrap&gt;' . $match[2] .
+                '&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;' . ($match[3] ?? '&lt;/html&gt;');
+        }
 
         $border_width = is_numeric($parameter['border_width_marriage']) ? (float) $parameter['border_width_marriage'] : 1.0;
         $shapes = array(

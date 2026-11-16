@@ -92,7 +92,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             'border_width_male', 'border_width_female', 'border_width_unknown', 'border_width_family',
             'font_size_male', 'font_size_female', 'font_size_unknown', 'font_size_family',
             'node_style_marriage', 'color_marriage', 'border_marriage', 'box_width_marriage', 'box_height_marriage',
-            'border_width_marriage', 'font_size_marriage',
+            'border_width_marriage', 'font_size_marriage', 'size_marriage',
             'default_portrait_male', 'default_portrait_female', 'default_portrait_unknown',
             'font', 'edge_line_width', 'node_style_link', 'border_width_link', 'border_link_color',
         ),
@@ -359,6 +359,9 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 'Box height' => 'Höhe des Kästchens',
                 'Box width' => 'Breite des Kästchens',
                 'empty: size of the text' => 'leer: Größe des Textes',
+                'Size' => 'Größe',
+                'estimated by the export, text centred' => 'vom Export geschätzt, Text zentriert',
+                'fitted in yEd (Tools, Fit Node to Label)' => 'in yEd angepasst (Werkzeuge, Fit Node to Label)',
                 'Error in the template: the bracket “%1$s” is not closed: %2$s' => 'Fehler im Template: Die Klammer „%1$s“ wird nicht geschlossen: %2$s',
                 'Error in the template: the loop “%1$s” has no matching %2$s: %3$s' => 'Fehler im Template: Zur Schleife „%1$s“ fehlt das passende %2$s: %3$s',
                 'Error in the template: the placeholder “%s” does not exist.' => 'Fehler im Template: Den Platzhalter „%s“ gibt es nicht.',
@@ -2059,7 +2062,16 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             echo I18N::translate($title) . '<input type="number" min="0" step="1" value="' . e($settings[$name]) .
                 '" placeholder="' . e(I18N::translate('empty: size of the text')) . '" name="' . $name . '"><br>';
         }
-        echo '<small>' . I18N::translate('empty: size of the text') . '</small></td></tr>';
+        echo '<small>' . I18N::translate('empty: size of the text') . '</small><br>' . I18N::translate('Size') .
+            '<select name="size_marriage">';
+        foreach (array(
+            'export' => 'estimated by the export, text centred',
+            'yed' => 'fitted in yEd (Tools, Fit Node to Label)',
+        ) as $value => $title) {
+            echo '<option value="' . $value . '"' . ($settings['size_marriage'] === $value ? ' selected' : '') . '>' .
+                I18N::translate($title) . '</option>';
+        }
+        echo '</select></td></tr>';
 
         /*
 		 * Box style - Border line width
