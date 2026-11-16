@@ -454,6 +454,38 @@ class ExportFamilyBookData extends AbstractModule
     }
 
     /**
+     * The portrait of an individual (all portrait placeholders, LaTeX and GraphML)
+     *
+     * The first picture file (order of the OBJE facts, then of the files of the media object) that is no
+     * external file, is a picture (MediaFile::isImage) and has the media type "photo" or none (TYPE below
+     * FORM, in GEDCOM 7 MEDI; upper or lower case). Other types (certificate, document, ...) are skipped,
+     * so a certificate is never the portrait. Unlike Individual::findHighlightedMediaFile, which takes the
+     * first picture of any type.
+     *
+     * @param Individual $record
+     * @return \Fisharebest\Webtrees\MediaFile|null null if the individual has no such picture
+     */
+    private function portraitFile(Individual $record): ?\Fisharebest\Webtrees\MediaFile
+    {
+        foreach ($record->facts(['OBJE']) as $fact) {
+            $media = $fact->target();
+            if (!$media instanceof Media) {
+                continue;
+            }
+            foreach ($media->mediaFiles() as $media_file) {
+                if (
+                    $media_file->isImage() && !$media_file->isExternal() &&
+                    in_array(strtolower(trim($media_file->type())), array('photo', ''), true)
+                ) {
+                    return $media_file;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Returns the portrait file name
      *
      * This module returns the file name of the portrait of an individual.
@@ -496,7 +528,7 @@ class ExportFamilyBookData extends AbstractModule
             $portrait_file = $portrait_fallback;
         } else {
             //$portrait = $record->findHighlightedMedia();
-            $portrait = $record->findHighlightedMediaFile();
+            $portrait = $this->portraitFile($record);
             if ($portrait) {
                 $portrait_file = $portrait->filename();
                 if ($servername) {
@@ -557,7 +589,7 @@ class ExportFamilyBookData extends AbstractModule
         $sharpness = trim($this->get_format($format, 3));
         $sharpness = preg_match('/^([1-9]|1[0-9]|20)$/', $sharpness) === 1 ? (int) $sharpness : 8;
 
-        $media_file = $record->findHighlightedMediaFile();
+        $media_file = $this->portraitFile($record);
         if ($media_file === null || $media_file->isExternal() || !$media_file->media()->canShow()) {
             return null;
         }

@@ -291,6 +291,20 @@ Sources 3 to 5 are alternatives: only the first existing file of them is used.
 `@FeFactType&IfExists@` and `@FeAttributeType&IfExists@` return nothing if the individual has no fact of
 this type. Both spellings work: `IfExists` (as in the help of the form) and `IfExist` (older templates).
 
+### Which picture is the portrait
+
+All portrait placeholders (`@Portrait@`, `@PortraitSize@`, `@PortraitIcon@`, in LaTeX and GraphML) use the same
+picture: the first picture of the individual (order of the media objects of the individual, then of the
+files of a media object) that
+
+- is a picture file (JPEG, PNG, GIF, ...) and no external file (web address), and
+- has the media type *Photo* or no media type (GEDCOM: `TYPE` below `FORM`, upper or lower case).
+
+Pictures of other types (certificate, document, ...) are skipped, so a certificate is no longer the portrait
+of an individual without photo. Without such a picture the individual has no portrait (as without any
+picture; `@Portrait&fallback@` gives the silhouette). This does not change the pictures of the book
+(`@ForeachMedia@`) nor the list of excluded pictures of the image selection.
+
 ### Special characters in the LaTeX export
 
 Data from webtrees (names, places, dates, facts, notes, captions of pictures, titles and authors of sources)
@@ -363,7 +377,8 @@ pictures is needed on the computer that runs yEd. Tested with yEd 3.25.1 (JPEG a
 | type | `jpg` (quality 92) or `png` (lossless, larger files) | `jpg` |
 | sharpness | `1` to `20`: the picture is stored with this many times the pixels of the width (other values: the default) | `8` |
 
-- The portrait is the highlighted image of the individual in webtrees. The module reduces the original file
+- The portrait is the first photo of the individual (see [Which picture is the portrait](#which-picture-is-the-portrait)).
+  The module reduces the original file
   (turned as given by its EXIF orientation) and encodes it once, JPEG with quality 92 or lossless PNG.
   A picture higher than 1.5 times its width is reduced to this height.
 - The reduced pictures are kept in the cache of webtrees (`data/cache/`, like the thumbnails of the web
