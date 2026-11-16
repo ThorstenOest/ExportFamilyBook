@@ -291,6 +291,20 @@ Sources 3 to 5 are alternatives: only the first existing file of them is used.
 `@FeFactType&IfExists@` and `@FeAttributeType&IfExists@` return nothing if the individual has no fact of
 this type. Both spellings work: `IfExists` (as in the help of the form) and `IfExist` (older templates).
 
+### Which picture is the portrait
+
+All portrait placeholders (`@Portrait@`, `@PortraitSize@`, `@PortraitIcon@`, in LaTeX and GraphML) use the same
+picture: the first picture of the individual (order of the media objects of the individual, then of the
+files of a media object) that
+
+- is a picture file (JPEG, PNG, GIF, ...) and no external file (web address), and
+- has the media type *Photo* or no media type (GEDCOM: `TYPE` below `FORM`, upper or lower case).
+
+Pictures of other types (certificate, document, ...) are skipped, so a certificate is no longer the portrait
+of an individual without photo. Without such a picture the individual has no portrait (as without any
+picture; `@Portrait&fallback@` gives the silhouette). This does not change the pictures of the book
+(`@ForeachMedia@`) nor the list of excluded pictures of the image selection.
+
 ### Special characters in the LaTeX export
 
 Data from webtrees (names, places, dates, facts, notes, captions of pictures, titles and authors of sources)
@@ -361,9 +375,10 @@ pictures is needed on the computer that runs yEd. Tested with yEd 3.25.1 (JPEG a
 | width | width of the picture in pixels; yEd shows it in this size | `100` |
 | position | `top` (picture above the text) or `left` (picture left of the text) | `top` |
 | type | `jpg` (quality 92) or `png` (lossless, larger files) | `jpg` |
-| sharpness | `1` to `10`: the picture is stored with this many times the pixels of the width (other values: the default) | `8` |
+| sharpness | `1` to `20`: the picture is stored with this many times the pixels of the width (other values: the default) | `8` |
 
-- The portrait is the highlighted image of the individual in webtrees. The module reduces the original file
+- The portrait is the first photo of the individual (see [Which picture is the portrait](#which-picture-is-the-portrait)).
+  The module reduces the original file
   (turned as given by its EXIF orientation) and encodes it once, JPEG with quality 92 or lossless PNG.
   A picture higher than 1.5 times its width is reduced to this height.
 - The reduced pictures are kept in the cache of webtrees (`data/cache/`, like the thumbnails of the web
@@ -387,7 +402,7 @@ pictures is needed on the computer that runs yEd. Tested with yEd 3.25.1 (JPEG a
 - The placeholder returns no text, its place in the template does not matter. In the LaTeX export it returns
   nothing.
 - The height of the box is increased by the height of the picture. As before, use **Tools → Fit Node to
-  Label** in yEd (see below).
+  Label** in yEd for the individuals (see below).
 - Why not `<img src="data:...">` in the HTML of the label: yEd draws HTML labels with Java, which does not
   load such pictures. yEd itself stores pictures as resources in the file and refers to them as label icons;
   `@PortraitIcon@` writes them in the same way as yEd 3.25.1: the resources follow `</graph>`, the label
@@ -429,6 +444,37 @@ How to change an existing template that uses picture files:
 3. If the box is too narrow for picture and text, increase the width of the boxes in the form.
 
 Templates that keep `@Portrait@` with a path work as before.
+
+### Family nodes in the family tree chart
+
+Each family is a node between the parents and the children. The form has two blocks for these nodes, each
+with shape, fill colour, border colour, size, border width and font size:
+
+- **Family without marriage information**: the label template of the families gives no text (for example
+  no date of marriage). The node is a small symbol in the shape and size of the block (*Symbol
+  width/height*), as before.
+- **Family with marriage information**: the label template gives text (the ring symbol, the date of
+  marriage, ...). The node is a box as large as the text, the text lies in it with the fill and border
+  colour of the block, and the edges end at the border of the box. The size is estimated from the longest
+  line (without HTML tags), the number of lines and the font size, with a small margin. *Box width* and
+  *Box height* set it yourself; empty means the size of the text. The node itself stays black under the
+  text, because the layout *Family Tree* of yEd finds the family nodes by their black fill. The *shape* is
+  the shape of this node: it decides where the edges end. With `rectangle` (default) they end exactly at the
+  border of the box; the box with the text is always a rectangle. A border width of `0` gives a box without
+  border.
+
+Older settings (files in the data folder, profiles, downloaded settings files, the example file) have one
+block "Family" only. They need no change: this block is used for families without marriage information,
+and families with marriage information take its fill colour, border colour, border width and font size,
+with the shape `rectangle` and the size of the text (shape and size of the old block are made for the small
+symbol).
+
+**End of a branch:** an individual where one branch ends and another begins (red border) is in both
+branches with all its families. A family gets no node (and no edges) in a branch where only this individual
+of the family is exported, if the family is shown in another branch (at least two of its members are
+exported there). So the box of the marriage is no longer hanging at the red individual in the old branch,
+whose spouse and children are not in it; the branch where the family is keeps the node. Families without
+such an individual are not changed, e.g. a couple without children keeps its node.
 
 ### Errors in a template or in the list of branches
 
@@ -487,14 +533,23 @@ needed. A template that refers to picture files with a path (`<img src="file:/..
 these files on the computer that runs yEd.
 
 1. Open the exported `.graphml` file in yEd. All nodes are placed on top of each other at first.
-2. Adapt the height of the nodes to their content, so that the pictures fit into the boxes:
+2. Select the individuals only (the family nodes are black, see
+   [Family nodes](#family-nodes-in-the-family-tree-chart); their size is set by the export):
+   **Tools → Select Elements** with
+   - tab *General*: *Select Inverse*: on
+   - tab *Nodes*: *Fill Color*: on, black (`#000000`)
+
+   This selects all nodes that are not black, i.e. the individuals. Tested with yEd 3.25.1.
+3. Adapt the height of the individuals to their content, so that the pictures fit into the boxes:
    **Tools → Fit Node to Label** with
-   - *Act on Selection Only*: off (all nodes)
+   - *Act on Selection Only*: on (only the individuals selected in step 2)
    - *Adapt to Maximum Node*: off
    - *Ignore Width*: on (the width given by the export is kept)
    - *Ignore Height*: off
-3. Arrange the chart: **Layout → Family Tree**, tab *Layout*, *Orientation*: **Left To Right**.
-4. Save it as PDF: **File → Export**, file type PDF.
+
+   Without the selection the family nodes would be changed too, e.g. a small symbol stretched to a line.
+4. Arrange the chart: **Layout → Family Tree**, tab *Layout*, *Orientation*: **Left To Right**.
+5. Save it as PDF: **File → Export**, file type PDF.
 
 If you run the layout first and adapt the node height afterwards, run the layout a second time,
 because it uses the node sizes it finds.

@@ -91,6 +91,8 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             'box_width_male', 'box_width_female', 'box_width_unknown', 'box_width_family',
             'border_width_male', 'border_width_female', 'border_width_unknown', 'border_width_family',
             'font_size_male', 'font_size_female', 'font_size_unknown', 'font_size_family',
+            'node_style_marriage', 'color_marriage', 'border_marriage', 'box_width_marriage', 'box_height_marriage',
+            'border_width_marriage', 'font_size_marriage',
             'default_portrait_male', 'default_portrait_female', 'default_portrait_unknown',
             'font', 'edge_line_width', 'node_style_link', 'border_width_link', 'border_link_color',
         ),
@@ -351,7 +353,12 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 '%1$s of %2$s branches are exported.' => '%1$s von %2$s Zweigen werden exportiert.',
                 'GraphML only: embeds the portrait in the file and shows it as icon of the box' => 'Nur GraphML: bettet das Portrait in die Datei ein und zeigt es als Bild im Kasten',
                 'LaTeX only: label of the entry of the individual in the second branch (empty without @Link@)' => 'Nur LaTeX: Sprungmarke des Eintrags der Person im zweiten Zweig (leer ohne @Link@)',
-                'width in pixels (default 100) & top or left & jpg or png & sharpness 1 to 10 (default 8)' =>'Breite in Pixeln (Standard 100) & top (oben) oder left (links) & jpg oder png & Schärfe 1 bis 10 (Standard 8)',
+                'width in pixels (default 100) & top or left & jpg or png & sharpness 1 to 20 (default 8)' =>'Breite in Pixeln (Standard 100) & top (oben) oder left (links) & jpg oder png & Schärfe 1 bis 20 (Standard 8)',
+                'Family with marriage information' => 'Familie mit Heiratsinformation',
+                'Family without marriage information' => 'Familie ohne Heiratsinformation',
+                'Box height' => 'Höhe des Kästchens',
+                'Box width' => 'Breite des Kästchens',
+                'empty: size of the text' => 'leer: Größe des Textes',
                 'Error in the template: the bracket “%1$s” is not closed: %2$s' => 'Fehler im Template: Die Klammer „%1$s“ wird nicht geschlossen: %2$s',
                 'Error in the template: the loop “%1$s” has no matching %2$s: %3$s' => 'Fehler im Template: Zur Schleife „%1$s“ fehlt das passende %2$s: %3$s',
                 'Error in the template: the placeholder “%s” does not exist.' => 'Fehler im Template: Den Platzhalter „%s“ gibt es nicht.',
@@ -988,7 +995,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             array(
                 'PortraitIcon',
                 I18N::translate('GraphML only: embeds the portrait in the file and shows it as icon of the box'),
-                I18N::translate('width in pixels (default 100) & top or left & jpg or png & sharpness 1 to 10 (default 8)'),
+                I18N::translate('width in pixels (default 100) & top or left & jpg or png & sharpness 1 to 20 (default 8)'),
                 '@PortraitIcon&30&left&jpg&8@'
             ),
             array('Gedcom', '', '-', '@Gedcom@'),
@@ -1785,6 +1792,8 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         if (is_null($settings)) {
             $settings = $this->readProfileSettings('graphml', $tree, $profile);
         };
+        // older settings without the block "Family with marriage information"
+        $settings = ExportFamilyBookData::familyNodeSettings($settings);
 
         // header
         echo '<div id="reportengine-page">
@@ -1900,7 +1909,10 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             'Unknown sex'
         ), '</td>';
         echo '<td class="descriptionbox width30 wrap"  colspan="1">', I18N::translate(
-            'Family'
+            'Family without marriage information'
+        ), '</td>';
+        echo '<td class="descriptionbox width30 wrap"  colspan="1">', I18N::translate(
+            'Family with marriage information'
         ), '</td></tr>';
 
         /*
@@ -1951,6 +1963,18 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 echo 'selected';
             echo '>' . $o . '</option>';
         };
+        echo '</select></td>';
+
+        // shape of the node under the box with the text: decides where the edges end
+        $selected = $settings['node_style_marriage'];
+        echo '<td class="optionbox"  colspan="1">' .
+            '<select name="node_style_marriage">';
+        foreach ($choicelist_family as $o) {
+            echo '<option value="' . $o . '"';
+            if ($selected == $o)
+                echo 'selected';
+            echo '>' . $o . '</option>';
+        };
         echo '</select></td></tr>';
 
         /*
@@ -1973,7 +1997,11 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         echo '<td class="optionbox" colspan="1">' .
             I18N::translate('Fill color') . '<input type="color" value="' .
             e(array_key_exists("color_family", $settings) ? $settings["color_family"] : "#ffffff") .
-            '" name="color_family"></td></tr>';
+            '" name="color_family"></td>';
+        echo '<td class="optionbox" colspan="1">' .
+            I18N::translate('Fill color') . '<input type="color" value="' .
+            e($settings["color_marriage"]) .
+            '" name="color_marriage"></td></tr>';
 
         /*
 		 * Box style - Border color
@@ -1992,7 +2020,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 '" name="' . $name . '"></td>';
         }
         foreach (array(
-            "family"
+            "family", "marriage"
         ) as $s) {
             $name = "border_" . $s;
             echo '<td class="optionbox" colspan="1">' .
@@ -2024,7 +2052,14 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             " " . I18N::translate('width') . "/" .
             I18N::translate('height') . '<input type="number" value="' .
             e(array_key_exists($name, $settings) ? $settings[$name] : "120") .
-            '" name="' . $name . '"></td></tr>';
+            '" name="' . $name . '"></td>';
+        // empty: the size of the text (see ExportFamilyBookData::familyTextNode)
+        echo '<td class="optionbox" colspan="1">';
+        foreach (array('box_width_marriage' => 'Box width', 'box_height_marriage' => 'Box height') as $name => $title) {
+            echo I18N::translate($title) . '<input type="number" min="0" step="1" value="' . e($settings[$name]) .
+                '" placeholder="' . e(I18N::translate('empty: size of the text')) . '" name="' . $name . '"><br>';
+        }
+        echo '<small>' . I18N::translate('empty: size of the text') . '</small></td></tr>';
 
         /*
 		 * Box style - Border line width
@@ -2033,7 +2068,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 		 */
         echo '<tr>';
         foreach (array(
-            "male", "female", "unknown", "family"
+            "male", "female", "unknown", "family", "marriage"
         ) as $s) {
             $name = "border_width_" . $s;
             echo '<td class="optionbox" colspan="1">' .
@@ -2051,7 +2086,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 		 */
         echo '<tr>';
         foreach (array(
-            "male", "female", "unknown", "family"
+            "male", "female", "unknown", "family", "marriage"
         ) as $s) {
             $name = "font_size_" . $s;
             echo '<td class="optionbox" colspan="1">' .
@@ -2080,7 +2115,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 '" name="' . $name . '"></td>';
         }
 
-        echo '<td class="optionbox" colspan="1"/></tr>';
+        echo '<td class="optionbox" colspan="1"/><td class="optionbox" colspan="1"/></tr>';
 
         /*
 		 * Font type

@@ -454,6 +454,38 @@ class ExportFamilyBookData extends AbstractModule
     }
 
     /**
+     * The portrait of an individual (all portrait placeholders, LaTeX and GraphML)
+     *
+     * The first picture file (order of the OBJE facts, then of the files of the media object) that is no
+     * external file, is a picture (MediaFile::isImage) and has the media type "photo" or none (TYPE below
+     * FORM, in GEDCOM 7 MEDI; upper or lower case). Other types (certificate, document, ...) are skipped,
+     * so a certificate is never the portrait. Unlike Individual::findHighlightedMediaFile, which takes the
+     * first picture of any type.
+     *
+     * @param Individual $record
+     * @return \Fisharebest\Webtrees\MediaFile|null null if the individual has no such picture
+     */
+    private function portraitFile(Individual $record): ?\Fisharebest\Webtrees\MediaFile
+    {
+        foreach ($record->facts(['OBJE']) as $fact) {
+            $media = $fact->target();
+            if (!$media instanceof Media) {
+                continue;
+            }
+            foreach ($media->mediaFiles() as $media_file) {
+                if (
+                    $media_file->isImage() && !$media_file->isExternal() &&
+                    in_array(strtolower(trim($media_file->type())), array('photo', ''), true)
+                ) {
+                    return $media_file;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Returns the portrait file name
      *
      * This module returns the file name of the portrait of an individual.
@@ -496,7 +528,7 @@ class ExportFamilyBookData extends AbstractModule
             $portrait_file = $portrait_fallback;
         } else {
             //$portrait = $record->findHighlightedMedia();
-            $portrait = $record->findHighlightedMediaFile();
+            $portrait = $this->portraitFile($record);
             if ($portrait) {
                 $portrait_file = $portrait->filename();
                 if ($servername) {
@@ -534,7 +566,7 @@ class ExportFamilyBookData extends AbstractModule
      *   width      width in pixels (default 100); yEd shows the icon in this size
      *   position   "top" (default: picture above the text) or "left" (picture left of the text)
      *   type       "jpg" (default, quality 92) or "png"
-     *   sharpness  1 to 10 (default 8; other values: default): the picture is stored with sharpness times
+     *   sharpness  1 to 20 (default 8; other values: default): the picture is stored with sharpness times
      *              the pixels and shown in the same size (yed:ScaledIcon with the scale 1/sharpness), so it
      *              stays sharp when zooming or printing. It is never enlarged beyond the original: a smaller
      *              original is stored in its own size and scaled to the shown size.
@@ -555,9 +587,9 @@ class ExportFamilyBookData extends AbstractModule
         $position = $this->get_format($format, 1) === "left" ? "left" : "top";
         $png = strtolower($this->get_format($format, 2)) === "png";
         $sharpness = trim($this->get_format($format, 3));
-        $sharpness = preg_match('/^([1-9]|10)$/', $sharpness) === 1 ? (int) $sharpness : 8;
+        $sharpness = preg_match('/^([1-9]|1[0-9]|20)$/', $sharpness) === 1 ? (int) $sharpness : 8;
 
-        $media_file = $record->findHighlightedMediaFile();
+        $media_file = $this->portraitFile($record);
         if ($media_file === null || $media_file->isExternal() || !$media_file->media()->canShow()) {
             return null;
         }
@@ -3672,6 +3704,174 @@ class ExportFamilyBookData extends AbstractModule
     }
 
     /**
+     * Settings of the family nodes with marriage information (GraphML)
+     *
+     * Older settings (files in the data folder, profiles, downloaded files, example file) have one block
+     * "Family" only. A missing field of the block "Family with marriage information" gets the value of
+     * this block for the colours, the border width and the font size (as the box of the text looked
+     * before); the shape is "rectangle" and the size automatic, because the shape and the size of the
+     * block "Family" are made for the small symbol.
+     *
+     * @param array $settings settings or form data
+     * @return array the settings with all fields of the family nodes
+     */
+    public static function familyNodeSettings(array $settings): array
+    {
+        $defaults = array(
+            'color_family' => '#ffffff',
+            'border_family' => '#ffffff',
+            'border_width_family' => '1',
+            'font_size_family' => '10',
+            'node_style_family' => 'diamond',
+            'box_width_family' => '120',
+        );
+        foreach ($defaults as $field => $default) {
+            if (!array_key_exists($field, $settings)) {
+                $settings[$field] = $default;
+            }
+        }
+        foreach (array('color', 'border', 'border_width', 'font_size') as $field) {
+            if (!array_key_exists($field . '_marriage', $settings)) {
+                $settings[$field . '_marriage'] = $settings[$field . '_family'];
+            }
+        }
+        foreach (array('node_style_marriage' => 'rectangle', 'box_width_marriage' => '', 'box_height_marriage' => '') as $field => $default) {
+            if (!array_key_exists($field, $settings)) {
+                $settings[$field] = $default;
+            }
+        }
+
+        return $settings;
+    }
+
+    /**
+     * Lines of text of the label of a family node as yEd shows them
+     *
+     * An HTML label ("<html>...") breaks lines at <br>, </tr>, </p>, </div>, </li> and headings, not at
+     * line breaks of the template; the tags are removed. A label without HTML breaks lines at line breaks.
+     * Empty lines are left out, so a label without text gives no lines.
+     *
+     * @param string $label the label (before < and > are replaced)
+     * @return array<string>
+     */
+    private function familyLabelLines(string $label): array
+    {
+        if (preg_match('~^\s*<html>~i', $label) === 1) {
+            $text = str_replace(array("\r", "\n"), ' ', $label);
+            $text = (string) preg_replace('~<\s*(br|/tr|/p|/div|/li|/h[1-6]|hr)\b[^>]*>~i', "\n", $text);
+            $text = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        } else {
+            $text = str_replace("\r", '', $label);
+        }
+        $lines = array();
+        foreach (explode("\n", $text) as $line) {
+            $line = trim((string) preg_replace('~[\s\x{00A0}]+~u', ' ', $line));
+            if ($line !== '') {
+                $lines[] = $line;
+            }
+        }
+
+        return $lines;
+    }
+
+    /**
+     * The shape of a family node with marriage information (GraphML, see exportGraphml)
+     *
+     * The node is as large as the text: estimated from the longest line, the number of lines and the font
+     * size, with a margin; a width or height set in the form is used instead. The label has the same size
+     * as the node (autoSizePolicy "node_size") and covers it with the fill and border colour of the form,
+     * so the edges end at the border of the box. The node keeps the black fill, by which the layout
+     * "Family Tree" of yEd finds the family nodes. The shape of the form is the shape of the node under
+     * the label: it decides where the edges end; "rectangle" ends them exactly at the border of the box.
+     *
+     * @param array $parameter settings of the form (see familyNodeSettings)
+     * @param array<string> $lines lines of text of the label (see familyLabelLines)
+     * @param string $label the label with < and > replaced
+     * @return string the <data key="d3"> element
+     */
+    private function familyTextNode(array $parameter, array $lines, string $label): string
+    {
+        $font_size = is_numeric($parameter['font_size_marriage']) && (float) $parameter['font_size_marriage'] > 0
+            ? (float) $parameter['font_size_marriage'] : 10.0;
+        $chars = 0;
+        foreach ($lines as $line) {
+            $chars = max($chars, mb_strlen($line));
+        }
+        $width = $parameter['box_width_marriage'];
+        $width = is_numeric($width) && (float) $width > 0 ? (float) $width : ceil($chars * $font_size * 0.6) + 8;
+        $height = $parameter['box_height_marriage'];
+        $height = is_numeric($height) && (float) $height > 0 ? (float) $height : ceil(count($lines) * $font_size * 1.3) + 6;
+
+        $border_width = is_numeric($parameter['border_width_marriage']) ? (float) $parameter['border_width_marriage'] : 1.0;
+        $shapes = array(
+            'rectangle', 'roundrectangle', 'ellipse', 'parallelogram', 'hexagon', 'triangle', 'rectangle3d',
+            'octagon3d', 'diamond', 'trapezoid', 'trapezoid2',
+        );
+        $shape = in_array($parameter['node_style_marriage'], $shapes, true) ? $parameter['node_style_marriage'] : 'rectangle';
+        $color = $parameter['color_marriage'];
+        $border = $parameter['border_marriage'];
+        if ($border_width > 0) {
+            // the border of the node lies on the border of the label (no black edge)
+            $node_border = '<y:BorderStyle color="' . $border . '" type="line" width="' . $parameter['border_width_marriage'] . '"/>';
+            $label_line = 'hasLineColor="true" lineColor="' . $border . '"';
+        } else {
+            $node_border = '<y:BorderStyle hasColor="false" type="line" width="1.0"/>';
+            $label_line = 'hasLineColor="false"';
+        }
+
+        return '<data key="d3"> <y:ShapeNode><y:Geometry height="' . $height . '" width="' . $width .
+            '" x="28" y="28"/><y:Fill color="#000000" color2="#000000" transparent="false"/>' . $node_border .
+            '<y:NodeLabel alignment="center" autoSizePolicy="node_size" backgroundColor="' . $color . '" ' .
+            $label_line . ' textColor="#000000" fontFamily="' . $parameter['font'] . '" fontSize="' .
+            $parameter['font_size_marriage'] . '" fontStyle="plain" visible="true" modelName="internal" ' .
+            'modelPosition="c" width="' . $width . '" height="' . $height . '" x="0" y="0">' . $label .
+            '</y:NodeLabel> <y:Shape type="' . $shape . '"/></y:ShapeNode> </data>' . "\n";
+    }
+
+    /**
+     * Is a family at the end of a branch only (GraphML)?
+     *
+     * Where a branch ends and another one begins, the individual connecting both (red border) is exported
+     * in both branches with all its families. A family gets no node in a sub branch if
+     * - in this sub branch only one member of the family (husband, wife, children) is exported and this
+     *   member connects the sub branch with another one, and
+     * - in another exported sub branch at least two members of the family are exported, so the family is
+     *   shown there.
+     * Families without a connecting individual (e.g. couples without children) and families shown nowhere
+     * else keep their node.
+     *
+     * @param Family $family
+     * @param array<string,bool> $members individuals of this sub branch (xref => true)
+     * @param array<string,bool> $links connecting individuals of this sub branch (xref => true)
+     * @param array<int,array<string,bool>> $sub_branch_members individuals of each exported sub branch
+     * @param int $index index of this sub branch in $sub_branch_members
+     * @return bool
+     */
+    private function familyAtBranchEnd($family, array $members, array $links, array $sub_branch_members, int $index): bool
+    {
+        $in_family = array();
+        foreach (array($this->husband($family), $this->wife($family)) as $parent) {
+            if ($parent) {
+                $in_family[$parent->xref()] = true;
+            }
+        }
+        foreach ($this->children($family) as $child) {
+            $in_family[$child->xref()] = true;
+        }
+        $here = array_intersect_key($in_family, $members);
+        if (count($here) !== 1 || !isset($links[array_key_first($here)])) {
+            return false;
+        }
+        foreach ($sub_branch_members as $i => $other) {
+            if ($i !== $index && count(array_intersect_key($in_family, $other)) >= 2) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Export the data in graphml format
      *
      * This is the main module which export the familty tree in graphml
@@ -3683,8 +3883,8 @@ class ExportFamilyBookData extends AbstractModule
     private function exportGraphml($gedout)
     {
 
-        // get parameter entered in the web form
-        $parameter = $_POST;
+        // get parameter entered in the web form (older settings: see familyNodeSettings)
+        $parameter = self::familyNodeSettings($_POST);
 
         $this->generationInd  = array();
         $this->include_exclude_media = array();
@@ -3742,6 +3942,22 @@ class ExportFamilyBookData extends AbstractModule
 
         // loop over all individuals
         //foreach ( $xrefInd as $xref ) {
+        // individuals of each exported sub branch, in the order of the export (see familyAtBranchEnd)
+        $sub_branch_members = array();
+        foreach ($generationInd_tree as $branch_array) {
+            foreach ($branch_array as $sub_branch_id => $sub_branch_array) {
+                if (key_exists($sub_branch_id, $seeds) && $seeds[$sub_branch_id]["include"]) {
+                    $members = array();
+                    foreach ($sub_branch_array as $generation_array) {
+                        foreach ($generation_array as $value) {
+                            $members[$value['xref']] = true;
+                        }
+                    }
+                    $sub_branch_members[] = $members;
+                }
+            }
+        }
+
         $no_edge = 0;
         $sub_branch_no = 0;
         $no_of_branches = count($generationInd_tree);
@@ -3772,6 +3988,8 @@ class ExportFamilyBookData extends AbstractModule
                     $xrefFam = array();
                     // individuals of the sub branch, the xref is the key
                     $ind_xref_list = array();
+                    // individuals connecting the sub branch with another one (red border), the xref is the key
+                    $link_xref_list = array();
                     $sub_branch_no += 1;
 
                     foreach ($sub_branch_array as $generation => $generation_array) {
@@ -3783,6 +4001,9 @@ class ExportFamilyBookData extends AbstractModule
                             $node_id = $xref . "_" . $sub_branch_no;
                             $ind_xref_list[$xref] = true;
                             $has_sub_branch_link = array_key_exists("sub_branch_link_id", $value);
+                            if ($has_sub_branch_link) {
+                                $link_xref_list[$xref] = true;
+                            }
                             //foreach ( $this->generationInd as $key => $row ) {
                             //$FAMS = array_merge($FAMS, $value['spouse_family']);
                             foreach ($value['spouse_family'] as $family) {
@@ -3895,6 +4116,7 @@ class ExportFamilyBookData extends AbstractModule
 				 * Create nodes for families
 				 */
                     // get parameter for the export
+                    // family without marriage information (empty label): small symbol
                     $col = $parameter['color_family'];
                     $node_style = $parameter['node_style_family'];
                     $col_border = $parameter['border_family'];
@@ -3908,6 +4130,12 @@ class ExportFamilyBookData extends AbstractModule
                         $this->increaseTimeLimit();
                         //$record = Family::getInstance($xref, $this->tree);
                         $record = Registry::familyFactory()->make($xref, $this->tree);
+
+                        // no node (and no edges) where a branch ends and the family belongs to another branch
+                        if ($this->familyAtBranchEnd($record, $ind_xref_list, $link_xref_list, $sub_branch_members, $sub_branch_no - 1)) {
+                            unset($xrefFam[$xref]);
+                            continue;
+                        }
 
                         $node_id_fam = $xref . "_" . $sub_branch_no;
                         // now replace the tags with record data
@@ -3924,6 +4152,9 @@ class ExportFamilyBookData extends AbstractModule
                                 $brackets[$a]
                             )[0];
                         }
+                        // text lines of the label as shown by yEd (without HTML tags)
+                        $label_lines = $this->familyLabelLines($nodetext["label"]);
+
                         // for the "lable" < and > must be replaced
                         // for description no replacement is required (not clear why this is the case)
                         $nodetext["label"] = str_replace(
@@ -3937,12 +4168,6 @@ class ExportFamilyBookData extends AbstractModule
                             $nodetext["label"]
                         );
 
-                        // count the number of rows to scale the box height accordingly
-                        $label_rows = count(
-                            explode("&lt;br&gt;", $nodetext["label"])
-                        ) +
-                            count(explode("&lt;tr&gt;", $nodetext["label"]));
-
                         // write export data
                         $buffer .= '<node id="' . $node_id_fam . '">' . "\n";
 
@@ -3951,39 +4176,42 @@ class ExportFamilyBookData extends AbstractModule
                         $buffer .= '<data key="d2"><![CDATA[' . $nodetext["description"] .
                             ']]></data>' . "\n";
 
-                        // if no label text then set visible flag to false
-                        // otherwise a box is created
-                        if ($nodetext["label"] == "") {
-                            $visible = "false";
-                            $border = '<y:BorderStyle hasColor="true" type="line" color="' .
-                                $col_border . '" width="' . $border_width . '"/>';
+                        if (count($label_lines) > 0) {
+                            // family with marriage information: the node has the size of the text and the
+                            // label covers it (autoSizePolicy node_size), so the edges end at the border of the
+                            // box; the node itself stays black for the layout "Family Tree" of yEd
+                            $buffer .= $this->familyTextNode($parameter, $label_lines, $nodetext["label"]);
                         } else {
-                            $visible = "true";
-                            $border = '<y:BorderStyle hasColor="false" type="line" width="' .
-                                $border_width . '"/>';
+                            // family without marriage information: small symbol, the label is not visible
+                            // count the number of rows to scale the box height accordingly
+                            $label_rows = count(
+                                explode("&lt;br&gt;", $nodetext["label"])
+                            ) +
+                                count(explode("&lt;tr&gt;", $nodetext["label"]));
+
+                            // note fill color must be black
+                            // otherwise yed does not find the family nodes
+                            $buffer .= '<data key="d3"> <y:ShapeNode>' . '<y:Geometry height="' .
+                                $box_width . '" width="' . $box_width . '" x="28" y="28"/>' .
+                                '<y:Fill color="#000000" color2="#000000" transparent="false"/>';
+
+                            $buffer .= '<y:BorderStyle hasColor="true" type="line" color="' .
+                                $col_border . '" width="' . $border_width . '"/>';
+                            $buffer .= '<y:NodeLabel alignment="center" autoSizePolicy="content" ' .
+                                'backgroundColor="' . $col . '" hasLineColor="true" ' .
+                                'lineColor="' . $col_border . '" ' .
+                                'textColor="#000000" fontFamily="' . $parameter['font'] .
+                                '" fontSize="' . $font_size . '" ' .
+                                'fontStyle="plain" visible="false" modelName="internal" modelPosition="c" ' . 'width="' .
+                                $box_width . '" height="' . (12 * $label_rows) .
+                                '" x="10" y="10">';
+
+                            $buffer .= $nodetext["label"];
+
+                            $buffer .= '</y:NodeLabel> <y:Shape type="' . $node_style . '"/>' .
+                                '</y:ShapeNode> </data>' . "\n";
                         }
-
-                        // note fill color must be black
-                        // otherwise yed does not find the family nodes
-                        $buffer .= '<data key="d3"> <y:ShapeNode>' . '<y:Geometry height="' .
-                            $box_width . '" width="' . $box_width . '" x="28" y="28"/>' .
-                            '<y:Fill color="#000000" color2="#000000" transparent="false"/>';
-
-                        $buffer .= $border;
-                        $buffer .= '<y:NodeLabel alignment="center" autoSizePolicy="content" ' .
-                            'backgroundColor="' . $col . '" hasLineColor="true" ' .
-                            'lineColor="' . $col_border . '" ' .
-                            'textColor="#000000" fontFamily="' . $parameter['font'] .
-                            '" fontSize="' . $font_size . '" ' .
-                            'fontStyle="plain" visible="' . $visible .
-                            '" modelName="internal" modelPosition="c" ' . 'width="' .
-                            $box_width . '" height="' . (12 * $label_rows) .
-                            '" x="10" y="10">';
-
-                        $buffer .= $nodetext["label"];
-
-                        $buffer .= '</y:NodeLabel> <y:Shape type="' . $node_style . '"/>' .
-                            '</y:ShapeNode> </data>' . "\n" . "</node>\n";
+                        $buffer .= "</node>\n";
 
                         // write data if buffer is full
                         if (strlen($buffer) > 65536) {
