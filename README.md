@@ -456,12 +456,38 @@ with shape, fill colour, border colour, size, border width and font size:
 - **Family with marriage information**: the label template gives text (the ring symbol, the date of
   marriage, ...). The node is a box as large as the text, the text lies in it with the fill and border
   colour of the block, and the edges end at the border of the box. The size is estimated from the longest
-  line (without HTML tags), the number of lines and the font size, with a small margin. *Box width* and
-  *Box height* set it yourself; empty means the size of the text. The node itself stays black under the
+  line (without HTML tags), the number of lines and the font size, with a small margin (see below). *Box
+  width* and *Box height* set it yourself; empty means the size of the text. The node itself stays black under the
   text, because the layout *Family Tree* of yEd finds the family nodes by their black fill. The *shape* is
   the shape of this node: it decides where the edges end. With `rectangle` (default) they end exactly at the
   border of the box; the box with the text is always a rectangle. A border width of `0` gives a box without
   border.
+
+**Size and centring of the text in the box:** the width of a line is estimated from the widths of its
+characters in the font of the form: narrow characters (space, `. , : ; ( ) [ ] - /`, `i j l t f r I`),
+digits and other signs, lower case letters, upper case letters, wide letters (`m w M W`) and symbols such
+as ⚭ or † (mostly shown in their own font, e.g. DejaVu Sans). The values per font were measured with the
+Java of yEd 3.25.1 for the fonts of the form; another font uses the largest value of each class. Spaces at
+the beginning and the end of a line are not counted. The estimate is rather a few points too wide than too
+small: for the labels of a real family tree in all fonts of the form and font sizes 6 to 14 no text was cut
+off, and the box was on average about 13 % wider than the text.
+
+yEd places the content of an HTML label (`<html>...`) at the left of the box and in the middle vertically;
+`alignment="center"` does not move it. Therefore the export puts the content of an HTML label into a table
+as wide as the box (less the inner margin of 2 points on each side) with one centred cell without line
+breaks, so the text is in the middle of the box, also where the estimate is a bit too wide. Nothing has to
+be changed in the template. Several lines (`<br>`) are centred each. A label without HTML is centred by yEd
+itself.
+
+*Size* in the block chooses who sets the size of these boxes:
+
+- **estimated by the export, text centred** (default): as described above; nothing to do in yEd.
+- **fitted in yEd (Tools, Fit Node to Label)**: the export writes the estimated size without the centring
+  table, and yEd fits each box to its text (step 3a in
+  [Family tree chart](#family-tree-chart-graphml-to-pdf-with-yed)). For a label with
+  `autoSizePolicy="node_size"` yEd measures the content of the label, so the box gets exactly the size of the
+  text plus the inner margin of the label and the space of the dialog; the label keeps covering the whole
+  node, so no black edge is left. The text is then in the middle up to 1 point (with a space of 1).
 
 Older settings (files in the data folder, profiles, downloaded settings files, the example file) have one
 block "Family" only. They need no change: this block is used for families without marriage information,
@@ -548,6 +574,24 @@ these files on the computer that runs yEd.
    - *Ignore Height*: off
 
    Without the selection the family nodes would be changed too, e.g. a small symbol stretched to a line.
+
+   3a. Only if *Size* of the block *Family with marriage information* is *fitted in yEd*: fit the boxes of
+   the families with marriage information to their text. First select them:
+   **Tools → Select Elements** with
+   - tab *General*: *Clear Selection First*: on, *Select Inverse*: off
+   - tab *Nodes*: *Fill Color*: on, black (`#000000`)
+
+   then **Tools → Select Elements** again with
+   - tab *General*: *Act On Current Selection Only*: on, *Select Inverse*: off
+   - tab *Nodes*: *Label*: on, *Match Type*: *Regular Expression*, text `(?s).+`
+
+   The second selection keeps only the black nodes with a label text; the families without marriage
+   information (small symbols, empty label) are left out, otherwise they would grow to the minimum size of
+   the dialog (at least 5 × 5). Then **Tools → Fit Node to Label** with
+   - *Act on Selection Only*: on
+   - *Adapt to Maximum Node*: off
+   - *Ignore Width*: off, *Ignore Height*: off
+   - *Horizontal Space* and *Vertical Space*: 1 (the minimum)
 4. Arrange the chart: **Layout → Family Tree**, tab *Layout*, *Orientation*: **Left To Right**.
 5. Save it as PDF: **File → Export**, file type PDF.
 
