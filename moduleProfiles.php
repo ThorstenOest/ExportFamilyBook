@@ -1031,7 +1031,7 @@ trait ExportFamilyBookProfiles
         }
 
         return $html . '<tr><td class="topbottombar" colspan="' . $colspan . '">' .
-            '<button type="submit" name="mod_action" value="save_tree_settings_' . $export_type . '">' .
+            '<button type="submit" name="mod_action" value="save_tree_settings_' . $export_type . '" id="efb-save-profile">' .
             e(I18N::translate('Save profile “%s”', $name)) . '</button> ' .
             '<label class="ms-3" for="efb-new-profile">' . e(I18N::translate('Save as new profile:')) . '</label> ' .
             '<input type="text" name="new_profile_name" id="efb-new-profile" maxlength="' . self::PROFILE_NAME_LENGTH . '" placeholder="' .

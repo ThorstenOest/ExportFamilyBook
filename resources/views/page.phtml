@@ -1,6 +1,7 @@
 <?php
 
 use Fisharebest\Webtrees\I18N;
+use Fisharebest\Webtrees\View;
 $html_help_content = file_get_contents(__DIR__ . '/page_help.html');
 $escaped_help_content = json_encode($html_help_content, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
 ?>
@@ -38,3 +39,67 @@ if ($export_type === 'latex') {
     $module->setParameterGraphml($settings, $tree, $individual, $profile['active']);
 }
 ?>
+
+<?php View::push('javascript') ?>
+<script>
+    (function () {
+        'use strict';
+
+        // Indicator "Export running": shown when the button "Export Family Tree" is pressed, hidden when the
+        // download has started. The server sets the cookie efb_export with the token of the form on the
+        // download. An error shows the page again (new page), so the indicator cannot stay.
+        const form = document.querySelector('form[data-efb-export]');
+        const button = document.getElementById('efb-export-button');
+        const status = document.getElementById('efb-export-status');
+        if (form !== null && button !== null && status !== null) {
+            const token = form.elements.namedItem('export_token');
+            let timer = null;
+            let expected = '';
+            const done = function () {
+                window.clearInterval(timer);
+                timer = null;
+                button.disabled = false;
+                status.hidden = true;
+            };
+            form.addEventListener('submit', function (event) {
+                // other buttons (download/upload settings, save profile) do not show the indicator
+                if (event.submitter !== button) {
+                    return;
+                }
+                // no second export while one is running
+                if (timer !== null) {
+                    event.preventDefault();
+                    return;
+                }
+                expected = Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+                token.value = expected;
+                status.hidden = false;
+                // disable after the form data is collected, so that mod_action of the button is sent
+                window.setTimeout(function () { button.disabled = true; }, 0);
+                timer = window.setInterval(function () {
+                    if (document.cookie.split(/;\s*/).indexOf('efb_export=' + expected) !== -1) {
+                        document.cookie = 'efb_export=; Path=/; Max-Age=0; SameSite=Strict';
+                        done();
+                    }
+                }, 500);
+            });
+            // page shown again from the browser cache (back button)
+            window.addEventListener('pageshow', function () {
+                if (timer !== null) {
+                    done();
+                }
+            });
+        }
+
+        // Button "Save profile" in the profile bar: presses the button of the export form
+        document.querySelectorAll('[data-efb-submit]').forEach(function (trigger) {
+            trigger.addEventListener('click', function () {
+                const target = document.getElementById(trigger.dataset.efbSubmit);
+                if (target !== null && target.form !== null) {
+                    target.form.requestSubmit(target);
+                }
+            });
+        });
+    })();
+</script>
+<?php View::endpush() ?>

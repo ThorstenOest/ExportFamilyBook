@@ -35,6 +35,14 @@ $standard = ($active === '');
             <div class="col-auto">
                 <?= e(I18N::translate('Active profile:')) ?> <strong id="efb-profile-active"><?= e($profile['active_name']) ?></strong>
             </div>
+            <?php if (($profile['save_button'] ?? '') !== '') : ?>
+                <div class="col-auto ms-md-auto">
+                    <?php /* presses the button "Save profile" of the export form (script of the view page), so the
+                             Enter key in the export form keeps starting the export, not saving the profile */ ?>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="efb-save-profile-bar"
+                            data-efb-submit="<?= e($profile['save_button']) ?>"><?= e(I18N::translate('Save profile “%s”', $profile['active_name'])) ?></button>
+                </div>
+            <?php endif ?>
         </form>
 
         <p class="small text-muted mb-1 mt-1">

@@ -49,12 +49,41 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
     protected int $access_level = Auth::PRIV_NONE;
 
     // Pages of the menu "Family book": export type => module action (getLatexAction, postLatexAction, ...)
-    // Further pages (e.g. selection of images, branches) are added here and in getMenu().
+    // Further pages are added here and in MENU_GROUPS.
     private const PAGE_ACTIONS = array(
         'latex' => 'Latex',
         'media' => 'Media',
         'branches' => 'Branches',
         'graphml' => 'Graphml',
+    );
+
+    // Entries of the menu "Family book" in their order; a divider line separates the groups
+    private const MENU_GROUPS = array(
+        array('latex', 'graphml'),
+        array('branches', 'media'),
+    );
+
+    // Divider above the first entry of a group: webtrees 2.2 renders the entries of a menu as links only
+    // (view components/menu-item), so the line of Bootstrap's .dropdown-divider is drawn as top border.
+    private const MENU_DIVIDER_STYLE = 'margin-top: var(--bs-dropdown-divider-margin-y, .5rem); ' .
+        'border-top: var(--bs-border-width, 1px) solid var(--bs-dropdown-divider-bg, rgba(0, 0, 0, .175));';
+
+    // Cookie set with the download of an export; its value is the token of the form (field export_token).
+    // The script of the page hides the indicator "Export running" when the cookie arrives.
+    private const EXPORT_COOKIE = 'efb_export';
+
+    // Shapes of the boxes of individuals and links (yEd node types) in the GraphML form
+    private const NODE_STYLES = array(
+        "BevelNode2", "Rectangle", "RoundRect", "BevelNode",
+        "BevelNodeWithShadow", "BevelNode3", "ShinyPlateNode",
+        "ShinyPlateNodeWithShadow", "ShinyPlateNode2", "ShinyPlateNode3",
+    );
+
+    // Shapes of the family nodes (yEd shape types) in the GraphML form
+    private const FAMILY_NODE_STYLES = array(
+        "rectangle", "roundrectangle", "ellipse",
+        "parallelogram", "hexagon", "triangle", "rectangle3d", "octagon3d",
+        "diamond", "trapezoid", "trapezoid2",
     );
 
     // User setting (per tree) with the reference individual used last in the form
@@ -213,6 +242,8 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         if (str_starts_with($language, 'de')) {
             return [
                 'Family book' => 'Familienbuch',
+                'Shape' => 'Form',
+                'Export running … The download starts when the file is ready. This can take a few minutes.' => 'Export läuft … Der Download beginnt, sobald die Datei fertig ist. Das kann einige Minuten dauern.',
                 'Book (LaTeX)' => 'Buch (LaTeX)',
                 'Family tree chart (GraphML)' => 'Stammbaum-Grafik (GraphML)',
                 'Go to %s' => 'Weiter zu %s',
@@ -402,13 +433,21 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         $xref    = Validator::attributes($request)->isXref()->string('xref', '');
 
         $submenus = array();
-        foreach (array_keys(self::PAGE_ACTIONS) as $export_type) {
-            $submenus[] = new Menu(
-                $this->pageTitle($export_type),
-                $this->pageUrl($tree, $export_type, $xref),
-                'menu-familybook-' . $export_type,
-                ['rel' => 'nofollow']
-            );
+        foreach (self::MENU_GROUPS as $group => $export_types) {
+            foreach ($export_types as $position => $export_type) {
+                $class = 'menu-familybook-' . $export_type;
+                $attributes = ['rel' => 'nofollow'];
+                if ($group > 0 && $position === 0) {
+                    $class .= ' menu-familybook-divider';
+                    $attributes['style'] = self::MENU_DIVIDER_STYLE;
+                }
+                $submenus[] = new Menu(
+                    $this->pageTitle($export_type),
+                    $this->pageUrl($tree, $export_type, $xref),
+                    $class,
+                    $attributes
+                );
+            }
         }
 
         // menu-report: icon of the reports menu in the standard themes
@@ -787,6 +826,8 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         $this->checkAccess($request, $tree);
         $individual = $this->referenceIndividual($request, $tree);
         $profile = $this->profileBarData($request, $tree, $export_type);
+        // button "Save profile" of the export form (saveProfileRow), triggered from the profile bar, too
+        $profile['save_button'] = $profile['can_manage'] ? 'efb-save-profile' : '';
         $this->form_profile = array(
             'id' => $profile['active'],
             'own' => $this->profileOwnFields($export_type, $tree, $profile['active']),
@@ -880,6 +921,15 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                     ->withHeader('content-type', 'text/plain; charset=UTF-8')
                     ->withHeader('content-disposition', 'attachment; filename="' . $download_filename . '"');
 
+                // the page shows "Export running" until this cookie with the token of the form arrives
+                $export_token = $parsedBodys['export_token'] ?? '';
+                if (is_string($export_token) && preg_match('/^[A-Za-z0-9]{8,64}$/', $export_token) === 1) {
+                    $response = $response->withAddedHeader(
+                        'set-cookie',
+                        self::EXPORT_COOKIE . '=' . $export_token . '; Path=/; Max-Age=300; SameSite=Strict'
+                    );
+                }
+
                 break;
             case "download_settings_graphml":
             case "download_settings_latex":
@@ -951,6 +1001,28 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         }
 
         return $response;
+    }
+
+    /**
+     * Row of the export form with the button "Export Family Tree" and the indicator "Export running"
+     *
+     * The script of the page (view page) fills export_token when the button is pressed, shows the
+     * indicator and hides it when the download has started (cookie EXPORT_COOKIE with the token).
+     *
+     * @param string $export_type 'latex' or 'graphml'
+     * @param int $colspan
+     * @return string
+     */
+    private function exportButtonRow(string $export_type, int $colspan): string
+    {
+        return '<tr><td class="topbottombar" colspan="' . $colspan . '">' .
+            '<input type="hidden" name="export_token" value="">' .
+            '<button type="submit" name="mod_action" value="export_' . $export_type . '" id="efb-export-button">' .
+            e(I18N::translate('Export Family Tree')) . '</button>' .
+            '<span class="efb-export-status ms-3" id="efb-export-status" role="status" hidden>' .
+            '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>' .
+            e(I18N::translate('Export running … The download starts when the file is ready. This can take a few minutes.')) .
+            '</span></td></tr>';
     }
 
 
@@ -1780,6 +1852,116 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
 
     /**
+     * Table "Box style" of the GraphML form: a column per kind of box, a row per property
+     *
+     * The fields have the same names and defaults as before; only the layout is new: equal columns,
+     * the property in the first column, labels of several fields in one cell above the field.
+     * The table scrolls horizontally in narrow windows instead of widening the page.
+     *
+     * @param array $settings settings of the form (with the block "Family with marriage information")
+     * @return string
+     */
+    private function boxStyleTable(array $settings): string
+    {
+        $kinds = array(
+            'male' => I18N::translate('Male'),
+            'female' => I18N::translate('Female'),
+            'unknown' => I18N::translate('Unknown sex'),
+            'family' => I18N::translate('Family without marriage information'),
+            'marriage' => I18N::translate('Family with marriage information'),
+        );
+        $value = fn (string $name, string $default): string => e((string) (array_key_exists($name, $settings) ? $settings[$name] : $default));
+        $select = function (string $name, array $choices, string $selected, string $label): string {
+            $html = '<select class="form-select form-select-sm" name="' . $name . '" aria-label="' . e($label) . '">';
+            foreach ($choices as $choice => $title) {
+                $choice = is_int($choice) ? $title : $choice;
+                $html .= '<option value="' . e($choice) . '"' . ((string) $selected === $choice ? ' selected' : '') . '>' . e($title) . '</option>';
+            }
+
+            return $html . '</select>';
+        };
+        $label = fn (string $kind, string $property): string => $property . ' – ' . $kinds[$kind];
+        $row = function (string $property, callable $cell) use ($kinds): string {
+            $html = '<tr><th scope="row" class="small text-wrap">' . e($property) . '</th>';
+            foreach (array_keys($kinds) as $kind) {
+                $html .= '<td class="text-wrap">' . $cell($kind) . '</td>';
+            }
+
+            return $html . '</tr>';
+        };
+
+        $html = '<div class="table-responsive efb-box-style">' .
+            '<table class="table table-sm table-borderless align-top mb-0" style="table-layout: fixed; min-width: 52rem;">' .
+            '<colgroup><col style="width: 8.5rem;"><col span="5"></colgroup><thead><tr><th scope="col"></th>';
+        foreach ($kinds as $title) {
+            $html .= '<th scope="col" class="small text-wrap">' . e($title) . '</th>';
+        }
+        $html .= '</tr></thead><tbody>';
+
+        $property = I18N::translate('Shape');
+        $html .= $row($property, fn (string $kind): string => match ($kind) {
+            'family', 'marriage' => $select('node_style_' . $kind, self::FAMILY_NODE_STYLES,
+                $value('node_style_' . $kind, 'diamond'), $label($kind, $property)),
+            default => $select('node_style_' . $kind, self::NODE_STYLES, $value('node_style_' . $kind, 'BevelNode'), $label($kind, $property)),
+        });
+
+        $colors = array('male' => '#ccccff', 'female' => '#ffcccc');
+        foreach (array('color' => I18N::translate('Fill color'), 'border' => I18N::translate('Border color')) as $prefix => $property) {
+            $html .= $row($property, fn (string $kind): string =>
+                '<input type="color" class="form-control form-control-sm form-control-color w-100" value="' .
+                $value($prefix . '_' . $kind, $prefix === 'color' ? ($colors[$kind] ?? '#ffffff') : '#ffffff') .
+                '" name="' . $prefix . '_' . $kind . '" aria-label="' . e($label($kind, $property)) . '">');
+        }
+
+        $property = I18N::translate('Size');
+        $html .= $row($property, function (string $kind) use ($value, $settings): string {
+            $field = fn (string $name, string $title, string $attributes): string =>
+                '<label class="form-label small mb-0" for="efb-' . $name . '">' . e($title) . '</label>' .
+                '<input type="number" class="form-control form-control-sm" id="efb-' . $name . '" name="' . $name . '" ' . $attributes . '>';
+            if ($kind !== 'marriage') {
+                $title = $kind === 'family'
+                    ? I18N::translate('Symbol') . ' ' . I18N::translate('width') . '/' . I18N::translate('height')
+                    : I18N::translate('Box width');
+
+                return $field('box_width_' . $kind, $title, 'value="' . $value('box_width_' . $kind, '120') . '"');
+            }
+            $empty = I18N::translate('empty: size of the text');
+            $html = '';
+            foreach (array('box_width_marriage' => I18N::translate('Box width'), 'box_height_marriage' => I18N::translate('Box height')) as $name => $title) {
+                $html .= $field($name, $title, 'min="0" step="1" value="' . $value($name, '') . '" placeholder="' . e($empty) . '"');
+            }
+            $html .= '<div class="small text-muted">' . e($empty) . '</div>' .
+                '<label class="form-label small mb-0" for="efb-size_marriage">' . e(I18N::translate('Size')) . '</label>' .
+                '<select class="form-select form-select-sm" name="size_marriage" id="efb-size_marriage">';
+            foreach (array(
+                'export' => 'estimated by the export, text centred',
+                'yed' => 'fitted in yEd (Tools, Fit Node to Label)',
+            ) as $option => $title) {
+                $html .= '<option value="' . $option . '"' . ($settings['size_marriage'] === $option ? ' selected' : '') . '>' .
+                    e(I18N::translate($title)) . '</option>';
+            }
+
+            return $html . '</select>';
+        });
+
+        foreach (array(
+            'border_width' => array(I18N::translate('Border width'), '1', '0.1'),
+            'font_size' => array(I18N::translate('Font size'), '10', '1'),
+        ) as $prefix => [$property, $default, $step]) {
+            $html .= $row($property, fn (string $kind): string =>
+                '<input type="number" class="form-control form-control-sm" value="' . $value($prefix . '_' . $kind, $default) .
+                '" step="' . $step . '" name="' . $prefix . '_' . $kind . '" aria-label="' . e($label($kind, $property)) . '">');
+        }
+
+        $property = I18N::translate('Default portrait');
+        $html .= $row($property, fn (string $kind): string => in_array($kind, array('family', 'marriage'), true) ? '' :
+            '<input type="text" class="form-control form-control-sm" value="' . $value('default_portrait_' . $kind, '') .
+            '" name="default_portrait_' . $kind . '" aria-label="' . e($label($kind, $property)) . '">');
+
+        return $html . '</tbody></table></div>';
+    }
+
+    /**
      * Generate a form to define the graphml format
      *
      * This function generates a form to define the export parameter
@@ -1800,7 +1982,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         // header
         echo '<div id="reportengine-page">
-            <form action=\'' . e($this->pageUrl($tree, 'graphml', $individual?->xref() ?? '')) . '\' name="setupreport" enctype="multipart/form-data" method="post">',
+            <form action=\'' . e($this->pageUrl($tree, 'graphml', $individual?->xref() ?? '')) . '\' name="setupreport" id="efb-form-graphml" data-efb-export="graphml" enctype="multipart/form-data" method="post">',
         csrf_field();
 
         echo '<table class="facts_table width50">
@@ -1893,241 +2075,12 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         echo '</textarea></td></tr>';
 
         /*
-		 * Box style header
-		 *
-		 * This is the header line for the block which defines the box styles.
-		 * Different box styles can be defines for
-		 * individuals (male, femal, unknown sex) and families.
+		 * Box style: one table with a column per kind of box (individuals by sex, family nodes)
+		 * and a row per property, see boxStyleTable()
 		 */
-        echo '<tr><td class="descriptionbox width30 wrap" rowspan="7">', I18N::translate(
-            'Box style'
-        ), '</td>';
-        echo '<td class="descriptionbox width30 wrap"  colspan="1">', I18N::translate(
-            'Male'
-        ), '</td>';
-        echo '<td class="descriptionbox width30 wrap"  colspan="1">', I18N::translate(
-            'Female'
-        ), '</td>';
-        echo '<td class="descriptionbox width30 wrap"  colspan="1">', I18N::translate(
-            'Unknown sex'
-        ), '</td>';
-        echo '<td class="descriptionbox width30 wrap"  colspan="1">', I18N::translate(
-            'Family without marriage information'
-        ), '</td>';
-        echo '<td class="descriptionbox width30 wrap"  colspan="1">', I18N::translate(
-            'Family with marriage information'
-        ), '</td></tr>';
-
-        /*
-		 * Box style - box type
-		 *
-		 * Here the types of the boxes are defined.
-		 */
-
-        $choicelist = array(
-            "BevelNode2", "Rectangle", "RoundRect", "BevelNode",
-            "BevelNodeWithShadow", "BevelNode3", "ShinyPlateNode",
-            "ShinyPlateNodeWithShadow", "ShinyPlateNode2", "ShinyPlateNode3"
-        );
-        echo '<tr>';
-        foreach (array(
-            "male", "female", "unknown"
-        ) as $s) {
-            $name = "node_style_" . $s;
-            // $selected = $settings[$name];
-            $selected = array_key_exists($name, $settings) ? $settings[$name] : "BevelNode";
-
-            echo '<td class="optionbox"  colspan="1">' . '<select name="' . $name .
-                '">';
-            foreach ($choicelist as $o) {
-                echo '<option value="' . $o . '"';
-                if ($selected == $o)
-                    echo 'selected';
-                echo '>' . $o . '</option>';
-            };
-            echo '</select></td>';
-        }
-
-        $name = "node_style_family";
-        // $selected = $settings[$name];
-        $selected = array_key_exists($name, $settings) ? $settings[$name] : "diamond";
-
-        $choicelist_family = array(
-            "rectangle", "roundrectangle", "ellipse",
-            "parallelogram", "hexagon", "triangle", "rectangle3d", "octagon3d",
-            "diamond", "trapezoid", "trapezoid2"
-        );
-
-        echo '<td class="optionbox"  colspan="1">' .
-            '<select name="node_style_family">';
-        foreach ($choicelist_family as $o) {
-            echo '<option value="' . $o . '"';
-            if ($selected == $o)
-                echo 'selected';
-            echo '>' . $o . '</option>';
-        };
-        echo '</select></td>';
-
-        // shape of the node under the box with the text: decides where the edges end
-        $selected = $settings['node_style_marriage'];
-        echo '<td class="optionbox"  colspan="1">' .
-            '<select name="node_style_marriage">';
-        foreach ($choicelist_family as $o) {
-            echo '<option value="' . $o . '"';
-            if ($selected == $o)
-                echo 'selected';
-            echo '>' . $o . '</option>';
-        };
-        echo '</select></td></tr>';
-
-        /*
-		 * Box style - Fill color
-		 *
-		 * Here the fill colors of the boxes are defined.
-		 */
-        echo '<tr><td class="optionbox" colspan="1">' .
-            I18N::translate('Fill color') . '<input type="color" value="' .
-            e(array_key_exists("color_male", $settings) ? $settings["color_male"] : "#ccccff") .
-            '" name="color_male"></td>';
-        echo '<td class="optionbox" colspan="1">' .
-            I18N::translate('Fill color') . '<input type="color" value="' .
-            e(array_key_exists("color_female", $settings) ? $settings["color_female"] : "#ffcccc") .
-            '" name="color_female"></td>';
-        echo '<td class="optionbox" colspan="1">' .
-            I18N::translate('Fill color') . '<input type="color" value="' .
-            e(array_key_exists("color_unknown", $settings) ? $settings["color_unknown"] : "#ffffff") .
-            '" name="color_unknown"></td>';
-        echo '<td class="optionbox" colspan="1">' .
-            I18N::translate('Fill color') . '<input type="color" value="' .
-            e(array_key_exists("color_family", $settings) ? $settings["color_family"] : "#ffffff") .
-            '" name="color_family"></td>';
-        echo '<td class="optionbox" colspan="1">' .
-            I18N::translate('Fill color') . '<input type="color" value="' .
-            e($settings["color_marriage"]) .
-            '" name="color_marriage"></td></tr>';
-
-        /*
-		 * Box style - Border color
-		 *
-		 * Here the border colors of the boxes are defined.
-		 */
-        echo '<tr>';
-        foreach (array(
-            "male", "female", "unknown"
-        ) as $s) {
-            $name = "border_" . $s;
-            echo '<td class="optionbox" colspan="1">' .
-                I18N::translate('Border color') .
-                '<input type="color" value="' .
-                e(array_key_exists($name, $settings) ? $settings[$name] : "#ffffff") .
-                '" name="' . $name . '"></td>';
-        }
-        foreach (array(
-            "family", "marriage"
-        ) as $s) {
-            $name = "border_" . $s;
-            echo '<td class="optionbox" colspan="1">' .
-                I18N::translate('Border color') .
-                '<input type="color" value="' .
-                e(array_key_exists($name, $settings) ? $settings[$name] : "#ffffff") .
-                '" name="' . $name . '"></td>';
-        }
-        echo '</tr>';
-
-        /*
-		 * Box style - Box width
-		 *
-		 * Here the widths of the boxes are defined.
-		 */
-        echo '<tr>';
-        foreach (array(
-            "male", "female", "unknown"
-        ) as $s) {
-            $name = "box_width_" . $s;
-            echo '<td class="optionbox" colspan="1">' .
-                I18N::translate('Box width') .
-                '<input type="number" value="' .
-                e(array_key_exists($name, $settings) ? $settings[$name] : "120") .
-                '" name="' . $name . '"></td>';
-        }
-        $name = "box_width_family";
-        echo '<td class="optionbox" colspan="1">' . I18N::translate('Symbol') .
-            " " . I18N::translate('width') . "/" .
-            I18N::translate('height') . '<input type="number" value="' .
-            e(array_key_exists($name, $settings) ? $settings[$name] : "120") .
-            '" name="' . $name . '"></td>';
-        // empty: the size of the text (see ExportFamilyBookData::familyTextNode)
-        echo '<td class="optionbox" colspan="1">';
-        foreach (array('box_width_marriage' => 'Box width', 'box_height_marriage' => 'Box height') as $name => $title) {
-            echo I18N::translate($title) . '<input type="number" min="0" step="1" value="' . e($settings[$name]) .
-                '" placeholder="' . e(I18N::translate('empty: size of the text')) . '" name="' . $name . '"><br>';
-        }
-        echo '<small>' . I18N::translate('empty: size of the text') . '</small><br>' . I18N::translate('Size') .
-            '<select name="size_marriage">';
-        foreach (array(
-            'export' => 'estimated by the export, text centred',
-            'yed' => 'fitted in yEd (Tools, Fit Node to Label)',
-        ) as $value => $title) {
-            echo '<option value="' . $value . '"' . ($settings['size_marriage'] === $value ? ' selected' : '') . '>' .
-                I18N::translate($title) . '</option>';
-        }
-        echo '</select></td></tr>';
-
-        /*
-		 * Box style - Border line width
-		 *
-		 * Here the widths of the border lines are defined.
-		 */
-        echo '<tr>';
-        foreach (array(
-            "male", "female", "unknown", "family", "marriage"
-        ) as $s) {
-            $name = "border_width_" . $s;
-            echo '<td class="optionbox" colspan="1">' .
-                I18N::translate('Border width') .
-                '<input type="number" value="' .
-                e(array_key_exists($name, $settings) ? $settings[$name] : "1") .
-                '" step="0.1" name="' . $name . '"></td>';
-        }
-        echo '</tr>';
-
-        /*
-		 * Box style - Font size
-		 *
-		 * Here the font sizes of the text are defined.
-		 */
-        echo '<tr>';
-        foreach (array(
-            "male", "female", "unknown", "family", "marriage"
-        ) as $s) {
-            $name = "font_size_" . $s;
-            echo '<td class="optionbox" colspan="1">' .
-                I18N::translate('Font size') .
-                '<input type="number" value="' .
-                e(array_key_exists($name, $settings) ? $settings[$name] : "10") .
-                '" step="1" name="' . $name . '"></td>';
-        }
-        echo '</tr>';
-
-        /*
-		 * Box style - default silhouettes
-		 *
-		 * Here the default silhouettes are defined.
-		 */
-        echo '<tr><td class="descriptionbox width30 wrap" rowspan="1">', I18N::translate(
-            'Default portrait'
-        ), '</td>';
-        foreach (array(
-            "male", "female", "unknown"
-        ) as $s) {
-            $name = "default_portrait_" . $s;
-            echo '<td class="optionbox" colspan="1">
-					<input type="text" size="30" value="' .
-                e(array_key_exists($name, $settings) ? $settings[$name] : "") .
-                '" name="' . $name . '"></td>';
-        }
-
-        echo '<td class="optionbox" colspan="1"/><td class="optionbox" colspan="1"/></tr>';
+        $choicelist = self::NODE_STYLES;
+        echo '<tr><td class="descriptionbox width30 wrap">', I18N::translate('Box style'), '</td>',
+            '<td class="optionbox" colspan="6">', $this->boxStyleTable($settings), '</td></tr>';
 
         /*
 		 * Font type
@@ -2209,10 +2162,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         //		'Export Family Tree' ), '</button>', '</td></tr>';
         // echo '</form>';
         // new for post method
-        echo '<tr><td class="topbottombar" colspan="6">',
-        '<button type="submit" name="mod_action" value="export_graphml">', I18N::translate(
-            'Export Family Tree'
-        ), '</button>', '</td></tr>';
+        echo $this->exportButtonRow('graphml', 6);
 
         // download settings
         // echo '<form name="download" method="get" action="module.php">
@@ -2286,7 +2236,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         // header line 
         echo '<div id="reportengine-page">
-				<form action=\'' . e($this->pageUrl($tree, 'latex', $individual?->xref() ?? '')) . '\' name="setupreport" enctype="multipart/form-data" method="post">',
+				<form action=\'' . e($this->pageUrl($tree, 'latex', $individual?->xref() ?? '')) . '\' name="setupreport" id="efb-form-latex" data-efb-export="latex" enctype="multipart/form-data" method="post">',
         csrf_field();
 
         echo '<table class="facts_table width50">
@@ -2552,10 +2502,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         //'<button name="mod_action" value="export_latex">', I18N::translate ( 
         //		'Export Family Tree' ), '</button>', '</td></tr>';
         // new for post method
-        echo '<tr><td class="topbottombar" colspan="7">',
-        '<button type="submit" name="mod_action" value="export_latex">', I18N::translate(
-            'Export Family Tree'
-        ), '</button>', '</td></tr>';
+        echo $this->exportButtonRow('latex', 7);
         /* '<form action=\'$module->chartUrl($individual, [\"mod_action\" => \"export_latex\"])\' method=\"post\">',
               '<?= csrf_field() ?>',
               '<input type="submit" value="', I18N::translate (

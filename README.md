@@ -4,19 +4,23 @@ A Module for Webtrees 2.0 to export a tree as a family book or graphml file
 ## Usage
 
 The module adds the menu **Family book** ("Familienbuch" in German) to the main navigation of a tree.
-It has one entry per page:
+It has one entry per page, in this order (a line separates the two export pages from the two selection pages):
 
 | Menu entry | Page | Address |
 |---|---|---|
 | Book (LaTeX) | export of the family book as a `.tex` file | `index.php?route=/module/_ExportFamilyBook_/Latex/<tree>` |
-| Image selection | choose the images of the family book (see below) | `index.php?route=/module/_ExportFamilyBook_/Media/<tree>` |
-| Branch selection ("Zweige") | edit the list of branches as a table, switch branches on and off (see below) | `index.php?route=/module/_ExportFamilyBook_/Branches/<tree>` (`&list=graphml` for the chart) |
 | Family tree chart (GraphML) | export of the chart as a `.graphml` file | `index.php?route=/module/_ExportFamilyBook_/Graphml/<tree>` |
+| Branch selection ("Zweige") | edit the list of branches as a table, switch branches on and off (see below) | `index.php?route=/module/_ExportFamilyBook_/Branches/<tree>` (`&list=graphml` for the chart) |
+| Image selection | choose the images of the family book (see below) | `index.php?route=/module/_ExportFamilyBook_/Media/<tree>` |
 
 - All four pages show the **book profile** bar at the top (see below): the active profile, a list to switch
   profiles and (for managers) "Manage profiles".
 - The two export pages have their own form with "Export Family Tree", "Download Settings", "Upload Settings"
   and (for managers) "Save profile “…”" and "Save as new profile", and a link to the other export page.
+  On the export pages, managers find "Save profile “…”" also in the profile bar; it saves the export form
+  below, like the button at the end of the form.
+- After "Export Family Tree" the page shows "Export running …" with a spinner next to the button until the
+  download starts (an export can take some minutes); the button cannot be pressed again meanwhile.
 - **Reference individual**: chosen in the form with the individual search field. A profile other than
   Standard has its own reference individual. Otherwise it is preselected with the individual of the page you
   came from (`xref` in the address), else the individual you used last in the form (saved per user and tree),
@@ -56,7 +60,8 @@ Functions:
 
 - **Switch**: choose a profile in the list. The choice is saved per user and tree (for visitors in the
   session), so several users do not disturb each other and switching writes nothing into the data folder.
-- **Save profile “…”** (export form): save the form in the active profile (see above).
+- **Save profile “…”** (export form, and in the profile bar of the export pages): save the form in the
+  active profile (see above).
 - **Save as new profile** (export form): create a profile from the form, including unsaved changes. A new
   profile made from Standard gets its own title, image selection, branch selection and reference individual.
 - **Manage profiles** (managers): copy the active profile under a new name (the saved state), rename it,
@@ -447,8 +452,10 @@ Templates that keep `@Portrait@` with a path work as before.
 
 ### Family nodes in the family tree chart
 
-Each family is a node between the parents and the children. The form has two blocks for these nodes, each
-with shape, fill colour, border colour, size, border width and font size:
+Each family is a node between the parents and the children. The table "Box style" of the form has a column
+for each kind of box (male, female, unknown sex and the two kinds of family nodes) and a row for the shape,
+fill colour, border colour, size, border width, font size and default portrait. The two columns of the family
+nodes are:
 
 - **Family without marriage information**: the label template of the families gives no text (for example
   no date of marriage). The node is a small symbol in the shape and size of the block (*Symbol
