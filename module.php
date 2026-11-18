@@ -422,8 +422,8 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 'Box width' => 'Breite des Kästchens',
                 'empty: size of the text' => 'leer: Größe des Textes',
                 'Size' => 'Größe',
-                'estimated by the export, text centred' => 'vom Export geschätzt, Text zentriert',
-                'fitted in yEd (Tools, Fit Node to Label)' => 'in yEd angepasst (Werkzeuge, Fit Node to Label)',
+                'estimated by the export, text centered' => 'vom Export geschätzt, Text zentriert',
+                'fitted in yEd (Tools, Fit Node to Label)' => 'in yEd angepasst (Tools, Fit Node to Label)',
                 'Error in the template: the bracket “%1$s” is not closed: %2$s' => 'Fehler im Template: Die Klammer „%1$s“ wird nicht geschlossen: %2$s',
                 'Error in the template: the loop “%1$s” has no matching %2$s: %3$s' => 'Fehler im Template: Zur Schleife „%1$s“ fehlt das passende %2$s: %3$s',
                 'Error in the template: the placeholder “%s” does not exist.' => 'Fehler im Template: Den Platzhalter „%s“ gibt es nicht.',
@@ -444,7 +444,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 'Relationship to the reference individual (with the reference symbols)' => 'Verwandtschaft zur Bezugsperson (mit den Symbolen für die Verwandtschaft)',
                 'Ancestors and descendants of ancestors' => 'Vorfahren und Nachkommen von Vorfahren',
                 'Symbol for ancestors & symbols for descendants of ancestors' => 'Symbol für Vorfahren & Symbol für Nachkommen von Vorfahren',
-                'Link to second branch with individuum' => 'Verweis auf den zweiten Zweig mit dieser Person',
+                'Link to the second branch that contains the individual' => 'Verweis auf den zweiten Zweig mit dieser Person',
                 'File name of the portrait' => 'Dateiname des Portraits',
                 'Height of the portrait for a width (w) or width for a height (h), in pixels' => 'Höhe des Portraits zu einer Breite (w) oder Breite zu einer Höhe (h), in Pixeln',
                 'w or h with the size & value without portrait' => 'w oder h mit der Größe & Wert ohne Portrait',
@@ -494,7 +494,8 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 'unsupported version' => 'nicht unterstützte Version',
                 'the file contains settings for another export type' => 'die Datei enthält Einstellungen für die andere Exportart',
                 'the value of %s is no text' => 'der Wert von %s ist kein Text',
-                'Export family tree' => 'Stammbaum exportieren',
+                'Export the family book' => 'Familienbuch exportieren',
+                'Export the family tree chart' => 'Stammbaum-Grafik exportieren',
                 'Open help' => 'Hilfe öffnen',
                 'Export the family book (LaTeX)' => 'Familienbuch exportieren (LaTeX)',
                 'Export the family tree chart (GraphML)' => 'Stammbaum-Grafik exportieren (GraphML)',
@@ -508,6 +509,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 'Symbol for the son' => 'Symbol für den Sohn',
                 'Symbol for the daughter' => 'Symbol für die Tochter',
                 'Preamble' => 'Präambel',
+                'LaTeX preamble' => 'LaTeX-Präambel',
                 'Document title' => 'Titel des Dokuments',
                 'Template for individuals' => 'Template für Personen',
                 'Template for families' => 'Template für Familien',
@@ -515,28 +517,31 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 'Entry of an individual' => 'Eintrag einer Person',
                 'Node label' => 'Text des Kästchens',
                 'Node description' => 'Beschreibung des Kästchens',
-                'Epilog' => 'Epilog',
+                'End of the document' => 'Schluss des Dokuments',
                 'Division into branches' => 'Aufteilung in Zweige',
+                'Edit branches' => 'Zweige bearbeiten',
+                'Open image selection' => 'Bilderauswahl öffnen',
                 'List of branches' => 'Liste der Zweige',
                 'Symbols for facts' => 'Symbole für Fakten',
-                'Symbols' => 'Symbole',
+                'List of symbols' => 'Liste der Symbole',
                 'Images of the book' => 'Bilder des Buchs',
                 'Always include' => 'Immer aufnehmen',
                 'Leave out' => 'Weglassen',
-                'Default formats' => 'Standardformate',
+                'Default formats' => 'Standard-Formate',
                 'Default date format' => 'Standard-Datumsformat',
                 'Default place format' => 'Standard-Ortsformat',
                 'Heading per group of connected individuals' => 'Überschrift je Gruppe verbundener Personen',
                 'Box style' => 'Aussehen der Kästchen',
                 'Unknown sex' => 'Geschlecht unbekannt',
-                'Fill colour' => 'Füllfarbe',
-                'Border colour' => 'Rahmenfarbe',
+                'Fill color' => 'Füllfarbe',
+                'Border color' => 'Rahmenfarbe',
+                'Sizing' => 'Größe bestimmen',
                 'Border width' => 'Rahmenbreite',
                 'Font size' => 'Schriftgröße',
                 'Default portrait' => 'Standard-Portrait',
                 'Symbol width/height' => 'Breite/Höhe des Symbols',
                 'Line width of the connections' => 'Linienbreite der Verbindungen',
-                'Box of an individual that connects two branches: shape, border width, border colour' => 'Kästchen einer Person, die zwei Zweige verbindet: Form, Rahmenbreite, Rahmenfarbe',
+                'Box of an individual that connects two branches: shape, border width, border color' => 'Kästchen einer Person, die zwei Zweige verbindet: Form, Rahmenbreite, Rahmenfarbe',
                 'Download settings' => 'Einstellungen herunterladen',
                 'Settings file' => 'Einstellungsdatei',
                 'File' => 'Datei',
@@ -1125,10 +1130,12 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
      */
     private function exportButtonRow(string $export_type, int $colspan): string
     {
+        $title = $export_type === 'latex' ? I18N::translate('Export the family book') : I18N::translate('Export the family tree chart');
+
         return '<tr><td class="topbottombar" colspan="' . $colspan . '">' .
             '<input type="hidden" name="export_token" value="">' .
             '<button type="submit" name="mod_action" value="export_' . $export_type . '" id="efb-export-button">' .
-            e(I18N::translate('Export family tree')) . '</button>' .
+            e($title) . '</button>' .
             '<span class="efb-export-status ms-3" id="efb-export-status" role="status" hidden>' .
             '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>' .
             e(I18N::translate('Export running … The download starts when the file is ready. This can take a few minutes.')) .
@@ -1172,7 +1179,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             array('Reference', I18N::translate('Relationship to the reference individual (with the reference symbols)'), '-', '@Reference@'),
             array('Ancestor', I18N::translate('Ancestors and descendants of ancestors'),
                 I18N::translate('Symbol for ancestors & symbols for descendants of ancestors'), '@Ancestor&*&**@'),
-            array('Link', I18N::translate('Link to second branch with individuum'), '-', '@Link@'),
+            array('Link', I18N::translate('Link to the second branch that contains the individual'), '-', '@Link@'),
             array('LinkId', I18N::translate('LaTeX only: label of the entry of the individual in the second branch (empty without @Link@)'),
                 'gen_no, no, xref', '\pageref{@LinkId&xref@}'),
             array('Portrait', I18N::translate('File name of the portrait'), 'fallback, silhouette', '@Portrait&fallback@'),
@@ -1913,7 +1920,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         });
 
         $colors = array('male' => '#ccccff', 'female' => '#ffcccc');
-        foreach (array('color' => I18N::translate('Fill colour'), 'border' => I18N::translate('Border colour')) as $prefix => $property) {
+        foreach (array('color' => I18N::translate('Fill color'), 'border' => I18N::translate('Border color')) as $prefix => $property) {
             $html .= $row($property, fn (string $kind): string =>
                 '<input type="color" class="form-control form-control-sm form-control-color w-100" value="' .
                 $value($prefix . '_' . $kind, $prefix === 'color' ? ($colors[$kind] ?? '#ffffff') : '#ffffff') .
@@ -1937,11 +1944,10 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             foreach (array('box_width_marriage' => I18N::translate('Box width'), 'box_height_marriage' => I18N::translate('Box height')) as $name => $title) {
                 $html .= $field($name, $title, 'min="0" step="1" value="' . $value($name, '') . '" placeholder="' . e($empty) . '"');
             }
-            $html .= '<div class="small text-muted">' . e($empty) . '</div>' .
-                '<label class="form-label small mb-0" for="efb-size_marriage">' . e(I18N::translate('Size')) . '</label>' .
+            $html .= '<label class="form-label small mb-0" for="efb-size_marriage">' . e(I18N::translate('Sizing')) . '</label>' .
                 '<select class="form-select form-select-sm" name="size_marriage" id="efb-size_marriage">';
             foreach (array(
-                'export' => I18N::translate('estimated by the export, text centred'),
+                'export' => I18N::translate('estimated by the export, text centered'),
                 'yed' => I18N::translate('fitted in yEd (Tools, Fit Node to Label)'),
             ) as $option => $title) {
                 $html .= '<option value="' . $option . '"' . ($settings['size_marriage'] === $option ? ' selected' : '') . '>' .
@@ -2063,7 +2069,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         echo '<tr><td class="descriptionbox width30 wrap" colspan="7">', I18N::translate(
             'Division into branches'
         ), ' – <a href="', e($this->pageUrl($tree, 'branches', $individual?->xref() ?? '', ['list' => 'graphml'])), '">',
-            e($this->pageTitle('branches')), '</a></td></tr>';
+            e(I18N::translate('Edit branches')), '</a></td></tr>';
 
         echo '<tr><td class="descriptionbox width30 wrap">', I18N::translate(
             'List of branches'
@@ -2128,7 +2134,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 		 * Box type, line width and line color for links
 		 */
         echo '<tr><td class="descriptionbox width30 wrap">', I18N::translate(
-            'Box of an individual that connects two branches: shape, border width, border colour'
+            'Box of an individual that connects two branches: shape, border width, border color'
         );
 
         $name = "node_style_link";
@@ -2246,7 +2252,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         ), '</td></tr>';
 
         echo '<tr><td class="descriptionbox width30 wrap">', I18N::translate(
-            "Preamble"
+            'LaTeX preamble'
         ), $this->profileFieldToggle('preamble'), '</td>';
 
         $name = "preamble";
@@ -2322,11 +2328,11 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 		 * Epilog
 		 */
         echo '<tr><td class="descriptionbox width30 wrap" colspan="7">', I18N::translate(
-            'Epilog'
+            'End of the document'
         ), '</td></tr>';
 
         echo '<tr><td class="descriptionbox width30 wrap">', I18N::translate(
-            "Epilog"
+            'Text'
         ), $this->profileFieldToggle('epilog'), '</td>';
 
         $name = "epilog";
@@ -2345,7 +2351,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         echo '<tr><td class="descriptionbox width30 wrap" colspan="7">', I18N::translate(
             'Division into branches'
         ), ' – <a href="', e($this->pageUrl($tree, 'branches', $individual?->xref() ?? '')), '">',
-            e($this->pageTitle('branches')), '</a></td></tr>';
+            e(I18N::translate('Edit branches')), '</a></td></tr>';
 
         echo '<tr><td class="descriptionbox width30 wrap">', I18N::translate(
             'List of branches'
@@ -2369,7 +2375,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         ), '</td></tr>';
 
         echo '<tr><td class="descriptionbox width30 wrap">', I18N::translate(
-            "Symbols"
+            'List of symbols'
         ), $this->profileFieldToggle('symbols'), '</td>';
 
         $name = "symbols";
@@ -2388,7 +2394,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         echo '<tr><td class="descriptionbox width30 wrap" colspan="7">', I18N::translate(
             'Images of the book'
         ), ' – <a href="', e($this->pageUrl($tree, 'media', $individual?->xref() ?? '')), '">',
-            e($this->pageTitle('media')), '</a></td></tr>';
+            e(I18N::translate('Open image selection')), '</a></td></tr>';
 
         echo '<tr><td class="descriptionbox width30 wrap">', I18N::translate(
             'Always include'

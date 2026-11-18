@@ -93,8 +93,8 @@ Labels of the boxes as yEd reads them:
 ```
 
 Here the blocks use `{` and `}`, because `<` and `>` are needed for the HTML of the label.
-The last line is the box of the marriage of Anna and Johann. (With the default *Size* "estimated by the
-export, text centred" of the family box, the export puts the content of the family label into a centred table,
+The last line is the box of the marriage of Anna and Johann. (With the default *Sizing* "estimated by the
+export, text centered" of the family box, the export puts the content of the family label into a centred table,
 see the README, [Family nodes](../README.md#family-nodes-in-the-family-tree-chart). The example shows the
 label with the size "fitted in yEd".)
 
@@ -106,12 +106,12 @@ The `.tex` file is put together in this order:
 
 | Part of the file | Field of the form (setting) | Template? |
 |---|---|---|
-| 1 | **Preamble** (`preamble`) | no: LaTeX, copied unchanged |
-| 2 | `\newcommand{\GedcomLegende}{...}`: the legend, made from **Symbols** (`symbols`, see below); only if a row of the symbols has a third column | made by the export |
+| 1 | **LaTeX preamble** (`preamble`) | no: LaTeX, copied unchanged |
+| 2 | `\newcommand{\GedcomLegende}{...}`: the legend, made from **List of symbols** (`symbols`, see below); only if a row of the symbols has a third column | made by the export |
 | 3 | `\usepackage{filecontents}` and the list of sources as `\jobname.bib` (title and author of each source the user may see) | made by the export |
 | 4 | **Title** (`title`): `\begin{document}`, title page, table of contents, `\GedcomLegende` ... | no: LaTeX, copied unchanged |
 | 5 | per branch and sub branch: the heading of the branch, then the summary, then per generation the heading and the entries | see below |
-| 6 | **Epilog** (`epilog`): bibliography, index, `\end{document}` | no: LaTeX, copied unchanged |
+| 6 | **End of the document** (`epilog`): bibliography, index, `\end{document}` | no: LaTeX, copied unchanged |
 
 Only two fields are templates, both for individuals:
 
@@ -132,7 +132,7 @@ The other fields of the book that the templates use:
 | Field | Used by | Content |
 |---|---|---|
 | **Reference symbols** (`ref_father`, `ref_mother`, `ref_wife`, `ref_husband`, `ref_son`, `ref_daughter`) | `@Reference@` | the symbol of each step of a relationship, e.g. `F`, `M`, `W`, `H`, `S`, `D` |
-| **Symbols** (`symbols`) | `@FeFactType@`, `@FeAttributeType@`, legend | first character: the column separator; then one row per GEDCOM tag: `TAG;symbol`, a third column (any text, e.g. `L`) puts the row into the legend `\GedcomLegende`, a fourth column is the text of the legend (default: the name of the tag in webtrees). Rows that are no tag (e.g. `Heirat`) only appear in the legend. Example: `;` then `OCCU;\dejavu{⚒};L` |
+| **List of symbols** (`symbols`) | `@FeFactType@`, `@FeAttributeType@`, legend | first character: the column separator; then one row per GEDCOM tag: `TAG;symbol`, a third column (any text, e.g. `L`) puts the row into the legend `\GedcomLegende`, a fourth column is the text of the legend (default: the name of the tag in webtrees). Rows that are no tag (e.g. `Heirat`) only appear in the legend. Example: `;` then `OCCU;\dejavu{⚒};L` |
 | **Default date format** (`default_date_format`) | all dates without format | e.g. `%j.%n.%Y` |
 | **Default place format** (`default_place_format`) | all places without format | e.g. `1,-1/Deutschland` |
 | **Always include / Leave out** (`include_media`, `exclude_media`) | `@ForeachMedia@` | media IDs, see the README, [Image selection](../README.md#image-selection) |
@@ -545,7 +545,7 @@ Inside the outer loop:
 
 | Placeholder | Meaning | Formats |
 |---|---|---|
-| `@FeFactType@` | the label of the fact type: the symbol of the field *Symbols* if the tag has one, else the name of the tag in webtrees (`Occupation`) | `IfExists&prefix&suffix`: prefix and suffix are only added to the name, not to a symbol |
+| `@FeFactType@` | the label of the fact type: the symbol of the field *List of symbols* if the tag has one, else the name of the tag in webtrees (`Occupation`) | `IfExists&prefix&suffix`: prefix and suffix are only added to the name, not to a symbol |
 
 Inside `@ForeachFactInner@` (the record is the fact):
 

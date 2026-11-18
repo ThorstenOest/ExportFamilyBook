@@ -418,7 +418,7 @@ Templates that keep `@Portrait@` with a path work as before.
 
 Each family is a node between the parents and the children. The table "Box style" of the form ("Aussehen der Kästchen" in German) has a column
 for each kind of box (male, female, unknown sex and the two kinds of family nodes) and a row for the shape,
-fill colour, border colour, size, border width, font size and default portrait. The two columns of the family
+fill color, border color, size, border width, font size and default portrait. The two columns of the family
 nodes are:
 
 - **Family without marriage information**: the label template of the families gives no text (for example
@@ -450,9 +450,9 @@ breaks, so the text is in the middle of the box, also where the estimate is a bi
 be changed in the template. Several lines (`<br>`) are centred each. A label without HTML is centred by yEd
 itself.
 
-*Size* in the block chooses who sets the size of these boxes:
+*Sizing* in the block chooses who sets the size of these boxes:
 
-- **estimated by the export, text centred** (default): as described above; nothing to do in yEd.
+- **estimated by the export, text centered** (default): as described above; nothing to do in yEd.
 - **fitted in yEd (Tools, Fit Node to Label)**: the export writes the estimated size without the centring
   table, and yEd fits each box to its text (step 3a in
   [Family tree chart](#family-tree-chart-graphml-to-pdf-with-yed)). For a label with
@@ -462,7 +462,7 @@ itself.
 
 Older settings (files in the data folder, profiles, downloaded settings files, the example file) have one
 block "Family" only. They need no change: this block is used for families without marriage information,
-and families with marriage information take its fill colour, border colour, border width and font size,
+and families with marriage information take its fill color, border color, border width and font size,
 with the shape `rectangle` and the size of the text (shape and size of the old block are made for the small
 symbol).
 
@@ -529,7 +529,7 @@ the packages `geometry`, `underscore`, `morefloats`, `fontspec`, `paralist`, `gr
 `mdframed`, `babel` (`ngerman`), `makeidx` and `biblatex` (with `backend=bibtex8`, hence the run of `bibtex8`),
 and the fonts named in step 2. The export itself adds two things after the preamble:
 
-- the command `\GedcomLegende` (the legend made from the field *Symbols*), a list `compactenum` of the package
+- the command `\GedcomLegende` (the legend made from the field *List of symbols*), a list `compactenum` of the package
   `paralist`, if a row of the symbols has a third column;
 - `\usepackage{filecontents}` and the list of sources in a `filecontents` environment, written to
   `<name of the .tex file>.bib` on the first run (therefore `\bibliography{\jobname}` in the preamble).
@@ -558,7 +558,7 @@ these files on the computer that runs yEd.
 
    Without the selection the family nodes would be changed too, e.g. a small symbol stretched to a line.
 
-   3a. Only if *Size* of the block *Family with marriage information* is *fitted in yEd*: fit the boxes of
+   3a. Only if *Sizing* of the block *Family with marriage information* is *fitted in yEd*: fit the boxes of
    the families with marriage information to their text. First select them:
    **Tools → Select Elements** with
    - tab *General*: *Clear Selection First*: on, *Select Inverse*: off

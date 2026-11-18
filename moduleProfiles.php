@@ -984,9 +984,9 @@ trait ExportFamilyBookProfiles
         return $prefix . match ($field) {
             'title' => I18N::translate('Title'),
             'include_media', 'exclude_media' => I18N::translate('Image selection'),
-            'preamble' => I18N::translate('Preamble'),
-            'epilog' => I18N::translate('Epilog'),
-            'symbols' => I18N::translate('Symbols'),
+            'preamble' => I18N::translate('LaTeX preamble'),
+            'epilog' => I18N::translate('End of the document'),
+            'symbols' => I18N::translate('List of symbols'),
             'branch_seeds' => I18N::translate('List of branches'),
             'individuals_summary_label_template' => I18N::translate('Summary at the beginning of a branch'),
             'individuals_label_template' => $export_type === 'graphml'
