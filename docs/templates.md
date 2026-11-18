@@ -45,7 +45,7 @@ Anna is the **reference individual** of the export.
 
 ### Family book (LaTeX)
 
-Template (field *Node label* of the book):
+Template (field *Entry of an individual* of the book):
 
 ```
 <>@&
@@ -93,8 +93,8 @@ Labels of the boxes as yEd reads them:
 ```
 
 Here the blocks use `{` and `}`, because `<` and `>` are needed for the HTML of the label.
-The last line is the box of the marriage of Anna and Johann. (With the default *Size* "estimated by the
-export, text centred" of the family box, the export puts the content of the family label into a centred table,
+The last line is the box of the marriage of Anna and Johann. (With the default *Sizing* "estimated by the
+export, text centered" of the family box, the export puts the content of the family label into a centred table,
 see the README, [Family nodes](../README.md#family-nodes-in-the-family-tree-chart). The example shows the
 label with the size "fitted in yEd".)
 
@@ -106,21 +106,21 @@ The `.tex` file is put together in this order:
 
 | Part of the file | Field of the form (setting) | Template? |
 |---|---|---|
-| 1 | **Preamble** (`preamble`) | no: LaTeX, copied unchanged |
-| 2 | `\newcommand{\GedcomLegende}{...}`: the legend, made from **Symbols** (`symbols`, see below); only if a row of the symbols has a third column | made by the export |
+| 1 | **LaTeX preamble** (`preamble`) | no: LaTeX, copied unchanged |
+| 2 | `\newcommand{\GedcomLegende}{...}`: the legend, made from **List of symbols** (`symbols`, see below); only if a row of the symbols has a third column | made by the export |
 | 3 | `\usepackage{filecontents}` and the list of sources as `\jobname.bib` (title and author of each source the user may see) | made by the export |
 | 4 | **Title** (`title`): `\begin{document}`, title page, table of contents, `\GedcomLegende` ... | no: LaTeX, copied unchanged |
 | 5 | per branch and sub branch: the heading of the branch, then the summary, then per generation the heading and the entries | see below |
-| 6 | **Epilog** (`epilog`): bibliography, index, `\end{document}` | no: LaTeX, copied unchanged |
+| 6 | **End of the document** (`epilog`): bibliography, index, `\end{document}` | no: LaTeX, copied unchanged |
 
 Only two fields are templates, both for individuals:
 
-- **Section summary label** (`individuals_summary_label_template`): applied to every individual of a sub branch
+- **Summary at the beginning of a branch** (`individuals_summary_label_template`): applied to every individual of a sub branch
   at the beginning of the sub branch, before the first generation. Only entries that are not empty are written.
   The example uses it to list the individuals that connect the branch with another one: the whole text is
   inside blocks that only `@Link@` makes visible (see [Recipes](#a-list-of-the-individuals-that-connect-two-branches)).
   Leave the field empty if you do not want a summary.
-- **Node label** (`individuals_label_template`): the entry of an individual in the book. It is written once per
+- **Entry of an individual** (`individuals_label_template`): the entry of an individual in the book. It is written once per
   individual and line (an individual that connects two branches has an entry in both, see
   [Labels and links](#labels-and-links-in-the-book-latex)).
 
@@ -132,19 +132,19 @@ The other fields of the book that the templates use:
 | Field | Used by | Content |
 |---|---|---|
 | **Reference symbols** (`ref_father`, `ref_mother`, `ref_wife`, `ref_husband`, `ref_son`, `ref_daughter`) | `@Reference@` | the symbol of each step of a relationship, e.g. `F`, `M`, `W`, `H`, `S`, `D` |
-| **Symbols** (`symbols`) | `@FeFactType@`, `@FeAttributeType@`, legend | first character: the column separator; then one row per GEDCOM tag: `TAG;symbol`, a third column (any text, e.g. `L`) puts the row into the legend `\GedcomLegende`, a fourth column is the text of the legend (default: the name of the tag in webtrees). Rows that are no tag (e.g. `Heirat`) only appear in the legend. Example: `;` then `OCCU;\dejavu{⚒};L` |
+| **List of symbols** (`symbols`) | `@FeFactType@`, `@FeAttributeType@`, legend | first character: the column separator; then one row per GEDCOM tag: `TAG;symbol`, a third column (any text, e.g. `L`) puts the row into the legend `\GedcomLegende`, a fourth column is the text of the legend (default: the name of the tag in webtrees). Rows that are no tag (e.g. `Heirat`) only appear in the legend. Example: `;` then `OCCU;\dejavu{⚒};L` |
 | **Default date format** (`default_date_format`) | all dates without format | e.g. `%j.%n.%Y` |
 | **Default place format** (`default_place_format`) | all places without format | e.g. `1,-1/Deutschland` |
-| **Include / Exclude** (`include_media`, `exclude_media`) | `@ForeachMedia@` | media IDs, see the README, [Image selection](../README.md#image-selection) |
-| **Seeds** (`branch_seeds`) | branches, `@Link@`, `@Id@` | see the README, [Branches](../README.md#branches) |
-| **Hierarchy level for branch, sub_branch, generation** (`hierarchy_branch`, `hierarchy_sub_branch`, `hierarchy_generation`) | headings | see below |
+| **Always include / Leave out** (`include_media`, `exclude_media`) | `@ForeachMedia@` | media IDs, see the README, [Image selection](../README.md#image-selection) |
+| **List of branches** (`branch_seeds`) | branches, `@Link@`, `@Id@` | see the README, [Branches](../README.md#branches) |
+| **Headings**: *Heading per group of connected individuals*, *Heading of the branch*, *Heading per generation* (`hierarchy_branch`, `hierarchy_sub_branch`, `hierarchy_generation`) | headings | see below |
 
 The **headings** are LaTeX commands that the export completes:
 
 - `hierarchy_branch` (e.g. `\part{`): a heading per *branch*, i.e. per group of individuals that are not
   connected with each other at all. It is only written if it starts with `\`; the export adds ` <number>}`, or
   only `}` if there is just one such group.
-- `hierarchy_sub_branch` (e.g. `\chapter{`): a heading per branch of the list *Seeds*; the export adds
+- `hierarchy_sub_branch` (e.g. `\chapter{`): a heading per branch of the list *List of branches*; the export adds
   ` <name of the branch>}`, or only `}` if only one branch is exported. A branch can have its own value
   (column 5 of the list).
 - `hierarchy_generation` (e.g. `\subsubsection{Generation`): a heading per generation; the export adds
@@ -545,7 +545,7 @@ Inside the outer loop:
 
 | Placeholder | Meaning | Formats |
 |---|---|---|
-| `@FeFactType@` | the label of the fact type: the symbol of the field *Symbols* if the tag has one, else the name of the tag in webtrees (`Occupation`) | `IfExists&prefix&suffix`: prefix and suffix are only added to the name, not to a symbol |
+| `@FeFactType@` | the label of the fact type: the symbol of the field *List of symbols* if the tag has one, else the name of the tag in webtrees (`Occupation`) | `IfExists&prefix&suffix`: prefix and suffix are only added to the name, not to a symbol |
 
 Inside `@ForeachFactInner@` (the record is the fact):
 
@@ -643,7 +643,7 @@ An individual where one branch ends and another begins (start or stop individual
 - The main label stays with the entry in the individual's own branch (the later branch of the list). If this
   branch is switched off, the entry in the other branch defines it.
 - `@Id&...@` directly inside `\label{...}` returns in the second entry the main label followed by `/` and the
-  number of the branch of this entry (counted from 0 in the list *Seeds*), e.g. `\label{I1/0}`. A `/` never
+  number of the branch of this entry (counted from 0 in the list *List of branches*), e.g. `\label{I1/0}`. A `/` never
   occurs in an XREF, so this label is never the label of another individual. If the second entry has
   `\label{@Id&...@}` without `<...>` around it, the export removes an empty `\label{}`.
 - `\pageref{@Id&xref@}` and all other references to the individual (`@FatherId@`, `@MotherId@`, `@SpouseId@`,
@@ -670,7 +670,7 @@ Example with the branches `I5;Muster;both;I1` and `I1;Beispiel;descendants` (Ann
 → Anna in "Muster": `Muster\label{I1/0} see Beispiel p.\pageref{I1}`; Anna in "Beispiel":
 `Muster\label{I1} see Muster p.\pageref{I1/0}`; Johann: `Beispiel\label{I2}`
 
-The name of the branch is written as it is in the list *Seeds* (it may contain LaTeX); in the chart it is masked
+The name of the branch is written as it is in the list *List of branches* (it may contain LaTeX); in the chart it is masked
 like data.
 
 ## Portraits
@@ -792,7 +792,7 @@ See [Labels and links](#labels-and-links-in-the-book-latex).
 
 ### A list of the individuals that connect two branches
 
-In the field *Section summary label*:
+In the field *Summary at the beginning of a branch*:
 
 ```
 <>@&<<@SurName@, @GivenName@>>< see @Link@>

@@ -27,7 +27,7 @@ $escaped_help_content = json_encode($html_help_content, JSON_HEX_TAG | JSON_HEX_
     <!-- Link to the page of the other export type -->
     <a href="<?= e($other_url) ?>" style="margin-right: 20px;"><?= e(I18N::translate('Go to %s', $other_title)) ?></a>
 
-    <button onclick="openPopup()"><?= I18N::translate('Open Help Window')?></button>
+    <button onclick="openPopup()"><?= I18N::translate('Open help')?></button>
 </p>
 
 <?= view($module->name() . '::profile_bar', ['profile' => $profile]) ?>
@@ -48,7 +48,7 @@ if ($export_type === 'latex') {
     (function () {
         'use strict';
 
-        // Indicator "Export running": shown when the button "Export Family Tree" is pressed, hidden when the
+        // Indicator "Export running": shown when the export button is pressed, hidden when the
         // download has started. The server sets the cookie efb_export with the token of the form on the
         // download. An error shows the page again (new page), so the indicator cannot stay.
         const form = document.querySelector('form[data-efb-export]');

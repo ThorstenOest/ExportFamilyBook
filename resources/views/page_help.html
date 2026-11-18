@@ -22,14 +22,14 @@
 <h2>Which field is what</h2>
 <table>
 <tr><th>Field</th><th>Content</th></tr>
-<tr><td>Book: Preamble, Title, Epilog</td><td>LaTeX, copied unchanged: start of the file, title page, end (bibliography, index, <code>\end{document}</code>)</td></tr>
-<tr><td>Book: Section summary label</td><td>template, applied to each individual at the beginning of a branch (e.g. a list of the individuals that connect two branches); may stay empty</td></tr>
-<tr><td>Book: Node label</td><td>template of the entry of an individual; families are written inside it with <code>@ForeachFAMS@</code></td></tr>
-<tr><td>Book: Symbols</td><td>symbols for fact types (<code>@FeFactType@</code>) and the legend <code>\GedcomLegende</code></td></tr>
-<tr><td>Book: Default formats, Hierarchy levels</td><td>date and place format for placeholders without format; LaTeX commands for the headings of branches and generations</td></tr>
+<tr><td>Book: LaTeX preamble, Title, End of the document</td><td>LaTeX, copied unchanged: start of the file, title page, end (bibliography, index, <code>\end{document}</code>)</td></tr>
+<tr><td>Book: Summary at the beginning of a branch</td><td>template, applied to each individual at the beginning of a branch (e.g. a list of the individuals that connect two branches); may stay empty</td></tr>
+<tr><td>Book: Entry of an individual</td><td>template of the entry of an individual; families are written inside it with <code>@ForeachFAMS@</code></td></tr>
+<tr><td>Book: List of symbols</td><td>symbols for fact types (<code>@FeFactType@</code>) and the legend <code>\GedcomLegende</code></td></tr>
+<tr><td>Book: Default formats, Headings</td><td>date and place format for placeholders without format; LaTeX commands for the headings of branches and generations</td></tr>
 <tr><td>Chart: Node label, Node description</td><td>templates of the box of an individual resp. of a family node (label: HTML if it starts with <code>&lt;html&gt;</code>)</td></tr>
 </table>
-<p>The file of the book: preamble, legend, list of sources, title, then per branch the headings, the summary and the entries, then the epilog.</p>
+<p>The file of the book: preamble, legend, list of sources, title, then per branch the headings, the summary and the entries, then the end of the document.</p>
 
 <h2>Basic rules</h2>
 <ul>
@@ -107,7 +107,7 @@ and <code>\textbf{Klein, Maria} \\</code> for an individual without dates.</p>
 <tr><td><code>@ForeachMedia&amp;types&amp;extensions&amp;unique@</code></td><td>each media file, e.g. <code>@ForeachMedia&amp;photo&amp;jpg,png&amp;unique@</code></td><td><code>@FeMediaFile@</code> (<code>&amp;NoExtension</code>), <code>@FeMediaId@</code>, <code>@FeMediaCaption@</code></td></tr>
 <tr><td><code>@ForeachReference@</code></td><td>each source</td><td><code>@FeReferenceName@</code>: number for <code>\cite{}</code></td></tr>
 </table>
-<p><code>@FeFactType@</code> and <code>@FeAttributeType@</code>: the symbol of the field Symbols or the name of the tag;
+<p><code>@FeFactType@</code> and <code>@FeAttributeType@</code>: the symbol of the field “List of symbols” or the name of the tag;
 formats <code>IfExists&amp;prefix&amp;suffix</code> (prefix and suffix only around a name). They never count as data.</p>
 
 <h2>Common errors</h2>
