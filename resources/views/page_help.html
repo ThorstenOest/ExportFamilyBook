@@ -1,9 +1,121 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <title>Help</title>
-  </head>
-  <body>
-    <h1>Help text to be written.</h1>
-  </body>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Help – Family book</title>
+<style>
+    body { font-family: sans-serif; font-size: 14px; line-height: 1.4; margin: 1em 1.5em; }
+    h1 { font-size: 1.4em; } h2 { font-size: 1.15em; margin-top: 1.5em; } h3 { font-size: 1em; }
+    code, pre { font-family: monospace; background: #f3f3f3; }
+    pre { padding: .5em; white-space: pre-wrap; }
+    table { border-collapse: collapse; margin: .5em 0; }
+    th, td { border: 1px solid #ccc; padding: 2px 6px; text-align: left; vertical-align: top; }
+</style>
+</head>
+<body>
+<h1>Help: templates of the family book and the chart</h1>
+
+<p>The complete reference with all formats and many examples:
+<a href="https://github.com/ThorstenOest/ExportFamilyBook/blob/main/docs/templates.md" target="_blank" rel="noopener">Templates of ExportFamilyBook</a>
+(GitHub, English). The README of the module describes profiles, branches, the image selection and how to make a PDF.</p>
+
+<h2>Which field is what</h2>
+<table>
+<tr><th>Field</th><th>Content</th></tr>
+<tr><td>Book: Preamble, Title, Epilog</td><td>LaTeX, copied unchanged: start of the file, title page, end (bibliography, index, <code>\end{document}</code>)</td></tr>
+<tr><td>Book: Section summary label</td><td>template, applied to each individual at the beginning of a branch (e.g. a list of the individuals that connect two branches); may stay empty</td></tr>
+<tr><td>Book: Node label</td><td>template of the entry of an individual; families are written inside it with <code>@ForeachFAMS@</code></td></tr>
+<tr><td>Book: Symbols</td><td>symbols for fact types (<code>@FeFactType@</code>) and the legend <code>\GedcomLegende</code></td></tr>
+<tr><td>Book: Default formats, Hierarchy levels</td><td>date and place format for placeholders without format; LaTeX commands for the headings of branches and generations</td></tr>
+<tr><td>Chart: Node label, Node description</td><td>templates of the box of an individual resp. of a family node (label: HTML if it starts with <code>&lt;html&gt;</code>)</td></tr>
+</table>
+<p>The file of the book: preamble, legend, list of sources, title, then per branch the headings, the summary and the entries, then the epilog.</p>
+
+<h2>Basic rules</h2>
+<ul>
+<li>The <b>first four characters</b> of a template define its special characters: opening and closing bracket of a block,
+placeholder character and format separator. Book: <code>&lt;&gt;@&amp;</code>, chart: <code>{}@&amp;</code>.
+These characters cannot be used as normal text.</li>
+<li>A <b>placeholder</b> is a name between two <code>@</code>, formats follow after <code>&amp;</code>:
+<code>@BirthDate&amp;%Y@</code>. Names are case sensitive.</li>
+<li>A <b>block</b> (text in brackets) is left out completely if no placeholder in it has data:
+<code>&lt; in @BirthPlace@&gt;</code>. Blocks can be nested. Double brackets <code>&lt;&lt;...&gt;&gt;</code> are written
+if they have data, but do not count as data for the block around them.</li>
+<li><b>Line breaks</b> of the template become spaces. Write <code>\\</code> (LaTeX) or <code>&lt;br&gt;</code> (HTML) for a line break.</li>
+<li>A <b>loop</b> repeats its text: <code>@ForeachFAMS@ ... @EndForeach@</code>. A pass without data is left out.
+Do not make the body of a loop one single block: write a space before it.</li>
+<li>A date without format uses the default date format; <b>without a default (always in the chart) it is empty</b>.</li>
+<li>Data are masked for LaTeX (<code>&amp;</code>, <code>%</code>, <code>_</code>, ...) resp. HTML; the text of the templates is not.</li>
+</ul>
+
+<h2>Example</h2>
+<pre>&lt;&gt;@&amp;
+\textbf{@SurName@, @GivenName@}
+&lt; *@BirthDate@&lt; in @BirthPlace@&gt;&gt;
+&lt; \dejavu{†}@DeathDate@&gt;\\</pre>
+<p>gives for example <code>\textbf{Muster, Anna Maria Luise} *3.3.1850 in Musterstadt \dejavu{†}20.11.1920\\</code>,
+and <code>\textbf{Klein, Maria} \\</code> for an individual without dates.</p>
+
+<h2>Placeholders</h2>
+<h3>Individuals</h3>
+<table>
+<tr><th>Placeholder</th><th>Meaning</th><th>Formats, example</th></tr>
+<tr><td><code>@GivenName@</code></td><td>given names</td><td>positions, <code>.</code> abbreviates the others: <code>@GivenName&amp;1,.@</code> → Anna M. L.</td></tr>
+<tr><td><code>@SurName@</code>, <code>@NickName@</code></td><td>surname, nickname</td><td>–</td></tr>
+<tr><td><code>@BirthDate@</code>, <code>@DeathDate@</code></td><td>date of birth, death</td><td>date format: <code>@BirthDate&amp;%Y@</code> → 1850, <code>%j.%n.%Y</code> → 3.3.1850</td></tr>
+<tr><td><code>@BirthPlace@</code>, <code>@DeathPlace@</code></td><td>place of birth, death</td><td>positions, <code>-1</code> = last, <code>/name</code> leaves the name out: <code>@BirthPlace&amp;1,-1/Deutschland@</code> → Musterstadt</td></tr>
+<tr><td><code>@FactOCCU@</code> (any tag)</td><td>value of the facts with this tag</td><td>positions in the list by date: <code>@FactOCCU&amp;-1@</code> → the last occupation; without format the values are glued together</td></tr>
+<tr><td><code>@Id@</code></td><td>number of the individual</td><td><code>gen_no</code> (default), <code>no</code> or <code>xref</code>: <code>\label{@Id&amp;xref@}</code></td></tr>
+<tr><td><code>@FatherGivenName@</code>, <code>@FatherSurName@</code>, <code>@FatherId@</code>, <code>@MotherGivenName@</code>, <code>@MotherSurName@</code>, <code>@MotherId@</code></td><td>father, mother (in <code>@ForeachFAMC@</code> of that family)</td><td>as <code>@GivenName@</code> resp. <code>@Id@</code></td></tr>
+<tr><td><code>@Reference@</code></td><td>relationship to the reference individual, with the reference symbols</td><td>–</td></tr>
+<tr><td><code>@Ancestor@</code></td><td>symbol for direct ancestors and descendants, symbol for other blood relatives</td><td><code>@Ancestor&amp;*&amp;**@</code></td></tr>
+<tr><td><code>@Link@</code></td><td>name of the other branch of an individual that connects two branches</td><td>–</td></tr>
+<tr><td><code>@LinkId@</code></td><td>book only: label of the entry in the other branch</td><td>as <code>@Id@</code>: <code>\pageref{@LinkId&amp;xref@}</code></td></tr>
+<tr><td><code>@Portrait@</code></td><td>file name of the portrait</td><td><code>fallback</code> or <code>silhouette</code> (default portrait of the chart)</td></tr>
+<tr><td><code>@PortraitSize@</code></td><td>other side of the portrait in pixels</td><td><code>@PortraitSize&amp;w30&amp;20@</code>: height for width 30, 20 without portrait</td></tr>
+<tr><td><code>@PortraitIcon@</code></td><td>chart only: portrait as picture of the box</td><td><code>@PortraitIcon&amp;width&amp;top|left&amp;jpg|png&amp;sharpness@</code>, e.g. <code>@PortraitIcon&amp;30&amp;left@</code></td></tr>
+<tr><td><code>@Gedcom@</code></td><td>GEDCOM of the record</td><td>–</td></tr>
+</table>
+
+<h3>Families (chart; book: inside <code>@ForeachFAMS@</code>)</h3>
+<table>
+<tr><th>Placeholder</th><th>Meaning</th><th>Formats, example</th></tr>
+<tr><td><code>@Marriage@</code></td><td>no text, but counts as data if there is a marriage</td><td><code>&lt;⚭@Marriage@&gt;</code></td></tr>
+<tr><td><code>@MarriageDate@</code>, <code>@MarriagePlace@</code></td><td>date and place of the marriage</td><td>date resp. place format</td></tr>
+<tr><td><code>@SpouseGivenName@</code>, <code>@SpouseSurName@</code>, <code>@SpouseId@</code></td><td>the spouse</td><td>as <code>@GivenName@</code> resp. <code>@Id@</code></td></tr>
+<tr><td><code>@FactNCHI@</code> (any tag), <code>@Gedcom@</code></td><td>facts and GEDCOM of the family</td><td>as for individuals</td></tr>
+</table>
+
+<h3>Text</h3>
+<table>
+<tr><th>Placeholder</th><th>Meaning</th><th>Example</th></tr>
+<tr><td><code>@Remove@</code></td><td>removes texts at the end of the text written so far</td><td><code>@Remove&amp;, @</code></td></tr>
+<tr><td><code>@Replace@</code></td><td>replaces a text at the end</td><td><code>@Replace&amp;:&amp;.@</code></td></tr>
+<tr><td><code>@Counter@</code></td><td>number of the pass of the loop</td><td><code>@Counter@.</code></td></tr>
+</table>
+
+<h3>Loops (each ends with <code>@EndForeach@</code>)</h3>
+<table>
+<tr><th>Loop</th><th>Repeats for</th><th>Placeholders inside</th></tr>
+<tr><td><code>@ForeachFAMC@</code></td><td>each family in which the individual is a child</td><td>father and mother, <code>@FeStepparents@</code> (adopted: stepparents, stepfather, stepmother)</td></tr>
+<tr><td><code>@ForeachFAMS@</code></td><td>each family in which the individual is a spouse</td><td>spouse, marriage, <code>@ForeachChildren@</code></td></tr>
+<tr><td><code>@ForeachChildren@</code></td><td>each child of the family</td><td>all placeholders of individuals, <code>@FeStepchild@</code></td></tr>
+<tr><td><code>@ForeachNAME&amp;_MARNM@</code></td><td>each name of the type (<code>_MARNM</code>: married names)</td><td><code>@SurName@</code> of that name</td></tr>
+<tr><td><code>@ForeachFactOuter&amp;order&amp;excluded@</code></td><td>each fact type; <i>order</i>: tags first, <i>excluded</i>: tags left out (<code>all</code>: all others)</td><td><code>@FeFactType@</code>, <code>@ForeachFactInner@</code></td></tr>
+<tr><td><code>@ForeachFactInner@</code></td><td>each fact of the type, by date</td><td><code>@FeFactType@</code>, <code>@FeFactValue@</code>, <code>@FeFactDate@</code>, <code>@FeFactPlace@</code>, <code>@FeFactNote@</code>, <code>@ForeachAttributeOuter@</code></td></tr>
+<tr><td><code>@ForeachAttributeOuter&amp;ADDR,PHON@</code></td><td>each given attribute of the fact</td><td><code>@FeAttributeType@</code>, <code>@FeFactAttribute@</code></td></tr>
+<tr><td><code>@ForeachMedia&amp;types&amp;extensions&amp;unique@</code></td><td>each media file, e.g. <code>@ForeachMedia&amp;photo&amp;jpg,png&amp;unique@</code></td><td><code>@FeMediaFile@</code> (<code>&amp;NoExtension</code>), <code>@FeMediaId@</code>, <code>@FeMediaCaption@</code></td></tr>
+<tr><td><code>@ForeachReference@</code></td><td>each source</td><td><code>@FeReferenceName@</code>: number for <code>\cite{}</code></td></tr>
+</table>
+<p><code>@FeFactType@</code> and <code>@FeAttributeType@</code>: the symbol of the field Symbols or the name of the tag;
+formats <code>IfExists&amp;prefix&amp;suffix</code> (prefix and suffix only around a name). They never count as data.</p>
+
+<h2>Common errors</h2>
+<ul>
+<li>The export shows the form again with a message: a placeholder that does not exist, a bracket that is not closed, a loop without <code>@EndForeach@</code>.</li>
+<li>A <code>&gt;</code> or <code>}</code> in the text ends the block (e.g. <code>-&gt;</code> in the book).</li>
+<li>Empty dates in the chart: write a format, e.g. <code>@BirthDate&amp;%Y@</code>.</li>
+<li>A loop writes nothing: its body is one single block, or it has no data.</li>
+</ul>
+</body>
 </html>

@@ -430,6 +430,64 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 'Error in the list of branches: a line has too many or too few columns: %s' => 'Fehler in der Liste der Zweige: Eine Zeile hat zu viele oder zu wenige Spalten: %s',
                 'Error in the list of branches: the value “%1$s” is not allowed in the last column (allowed: %2$s): %3$s' => 'Fehler in der Liste der Zweige: Der Wert „%1$s“ ist in der letzten Spalte nicht erlaubt (erlaubt: %2$s): %3$s',
                 'Error in the list of branches: the direction “%1$s” is not allowed (allowed: %2$s): %3$s' => 'Fehler in der Liste der Zweige: Die Richtung „%1$s“ ist nicht erlaubt (erlaubt: %2$s): %3$s',
+                'positions of the given names written in full, “.” abbreviates the others' => 'Positionen der Vornamen, die ausgeschrieben werden, „.“ kürzt die übrigen ab',
+                'Surname (in a loop @ForeachNAME@ the surname of that name)' => 'Nachname (in einer Schleife @ForeachNAME@ der Nachname dieses Namens)',
+                'Given names of the father or mother (in a loop @ForeachFAMC@ of that family) or of the spouse (loop @ForeachFAMS@)' => 'Vornamen des Vaters oder der Mutter (in einer Schleife @ForeachFAMC@ die dieser Familie) oder des Ehepartners (Schleife @ForeachFAMS@)',
+                'as for GivenName' => 'wie bei GivenName',
+                'Surname of the father, mother or spouse' => 'Nachname des Vaters, der Mutter oder des Ehepartners',
+                'date format of webtrees, e.g. %%j.%%n.%%Y or %%Y; without format the default date format, without default date format the date is empty' => 'Datumsformat von webtrees, z. B. %%j.%%n.%%Y oder %%Y; ohne Formatangabe das Standard-Datumsformat, ohne Standard-Datumsformat bleibt das Datum leer',
+                'positions in the place (-1 = the last one); /name leaves this name out; without format the default place format' => 'Positionen im Ort (-1 = die letzte); /Name lässt diesen Namen weg; ohne Formatangabe das Standard-Ortsformat',
+                'No text, but counts as data if the family has a marriage' => 'Kein Text, zählt aber als Daten, wenn die Familie eine Heirat hat',
+                'Value of the facts with the tag XXXX, e.g. FactOCCU' => 'Wert der Fakten mit dem Tag XXXX, z. B. FactOCCU',
+                'positions in the list of these facts sorted by date (-1 = the last one); without format all values without separator' => 'Positionen in der nach Datum sortierten Liste dieser Fakten (-1 = das letzte); ohne Formatangabe alle Werte ohne Trennzeichen',
+                'Number of the individual' => 'Nummer der Person',
+                'Relationship to the reference individual (with the reference symbols)' => 'Verwandtschaft zur Bezugsperson (mit den Bezugssymbolen)',
+                'Ancestors and descendants of ancestors' => 'Vorfahren und Nachkommen von Vorfahren',
+                'Symbol for ancestors & symbols for descendants of ancestors' => 'Symbol für Vorfahren & Symbol für Nachkommen von Vorfahren',
+                'Link to second branch with individuum' => 'Verweis auf den zweiten Zweig mit dieser Person',
+                'File name of the portrait' => 'Dateiname des Portraits',
+                'Height of the portrait for a width (w) or width for a height (h), in pixels' => 'Höhe des Portraits zu einer Breite (w) oder Breite zu einer Höhe (h), in Pixeln',
+                'w or h with the size & value without portrait' => 'w oder h mit der Größe & Wert ohne Portrait',
+                'GEDCOM of the record' => 'GEDCOM des Datensatzes',
+                'Counter in foreach loop' => 'Zähler in einer Schleife',
+                'Removes texts at the end of the text written so far' => 'Entfernt Texte am Ende des bisher geschriebenen Texts',
+                'String to be removed' => 'Zu entfernender Text',
+                'Replaces a text at the end of the text written so far' => 'Ersetzt einen Text am Ende des bisher geschriebenen Texts',
+                'String to be replaced & replacement' => 'Zu ersetzender Text & Ersatz',
+                'Foreach loop over families where individual is a child' => 'Schleife über die Familien, in denen die Person Kind ist',
+                'Foreach loop over families where individual is a spouse' => 'Schleife über die Familien, in denen die Person Ehepartner ist',
+                'Foreach loop over the children of the family (in a loop @ForeachFAMS@)' => 'Schleife über die Kinder der Familie (in einer Schleife @ForeachFAMS@)',
+                'Adoption of the child in the family (stepparents, stepfather, stepmother) in a loop @ForeachFAMC@ resp. @ForeachChildren@' => 'Adoption des Kindes in der Familie (stepparents, stepfather, stepmother) in einer Schleife @ForeachFAMC@ bzw. @ForeachChildren@',
+                'Foreach loop over all names of an individual' => 'Schleife über die Namen einer Person',
+                'Type of the name, _MARNM for married names' => 'Art des Namens, _MARNM für Ehenamen',
+                'Foreach loop over fact types given as format' => 'Schleife über die Faktenarten',
+                'Comma separated list of ordered facts & comma separated list of facts to be neglected (all everything excluded except the ordered list)' => 'Liste der Tags, die zuerst kommen (durch Kommas getrennt) & Liste der Tags, die wegfallen (all: alle außer der ersten Liste)',
+                'Foreach loop over facts within in ForeachFactOuter loop' => 'Schleife über die Fakten einer Art in einer Schleife ForeachFactOuter',
+                'Foreach loop over the given attributes of the fact in a loop @ForeachFactInner@' => 'Schleife über die angegebenen Attribute des Faktums in einer Schleife @ForeachFactInner@',
+                'comma separated list of tags' => 'Liste der Tags, durch Kommas getrennt',
+                'Returns the fact type within a ForeachFactOuter loop' => 'Art des Faktums (Symbol oder Name) in einer Schleife ForeachFactOuter',
+                'IfExists or IfExist (nothing is returned if no facts exists)&prefix&postfix' => 'IfExists oder IfExist (nichts, wenn es kein solches Faktum gibt) & Präfix & Suffix',
+                'Returns the fact value within a ForeachFactInner loop' => 'Wert des Faktums in einer Schleife ForeachFactInner',
+                'Note of the fact in a loop @ForeachFactInner@' => 'Notiz des Faktums in einer Schleife @ForeachFactInner@',
+                'Value of the attribute in a loop @ForeachAttributeOuter@' => 'Wert des Attributs in einer Schleife @ForeachAttributeOuter@',
+                'date or place format for DATE and PLAC' => 'Datums- bzw. Ortsformat für DATE und PLAC',
+                'Foreach loop over media object' => 'Schleife über die Mediendateien',
+                'Comma separated list of types & comma separated list of file extensions & unique if no duplicates' => 'Liste der Medienarten & Liste der Dateiendungen (jeweils durch Kommas getrennt) & unique, wenn jedes Bild nur einmal vorkommen soll',
+                'Returns the media file name within a ForeachMedia loop' => 'Dateiname in einer Schleife ForeachMedia',
+                'NoExtension if extension should be removed' => 'NoExtension: ohne Dateiendung',
+                'Unique ID of the media file in a loop @ForeachMedia@, e.g. for a label' => 'Eindeutige ID der Mediendatei in einer Schleife @ForeachMedia@, z. B. für eine Sprungmarke',
+                'Returns the media title within a ForeachMedia loop' => 'Titel der Mediendatei in einer Schleife ForeachMedia',
+                'Foreach loop over references' => 'Schleife über die Quellen',
+                'Returns the number of the source within a ForeachReference loop, for \cite' => 'Nummer der Quelle in einer Schleife ForeachReference, für \cite',
+                'Templates of the book: the field “Node label” is the entry of an individual, families are written in it with loops.' => 'Templates des Buchs: Das Feld „Node label“ ist der Eintrag einer Person, Familien stehen darin in Schleifen.',
+                'Templates of the boxes of the individuals in the chart.' => 'Templates der Kästchen der Personen in der Grafik.',
+                'Templates of the family nodes in the chart: placeholders of families (Marriage, MarriageDate, MarriagePlace, FactXXXX, Gedcom), loops over the children and the facts of the family.' => 'Templates der Familienknoten in der Grafik: Platzhalter für Familien (Marriage, MarriageDate, MarriagePlace, FactXXXX, Gedcom), Schleifen über die Kinder und die Fakten der Familie.',
+                'The first four characters within a template define the brackets used to group tag areas and the identifier for a tag and the format part, e.g. {}@&.' => 'Die ersten vier Zeichen eines Templates legen die Klammern eines Blocks, das Platzhalterzeichen und das Trennzeichen der Formatangaben fest, z. B. {}@&.',
+                'Text inside brackets is only included if a placeholder in it has data. Double brackets hide resolved placeholders to the outside.' => 'Text in Klammern erscheint nur, wenn ein Platzhalter darin Daten hat. Doppelte Klammern zählen für den umgebenden Block nicht als Daten.',
+                'Line breaks of the template become spaces.' => 'Zeilenumbrüche im Template werden zu Leerzeichen.',
+                'Full description with examples: %s' => 'Ausführliche Beschreibung mit Beispielen (Englisch): %s',
+                'Placeholder' => 'Platzhalter',
+                'Example given identifier @&' => 'Beispiel (mit den Zeichen @&)',
             ];
         }
 
@@ -1025,249 +1083,108 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
     }
 
     /**
-     * Get the help text
+     * Get the help text: the table of the placeholders (icon "?" next to "Template for ...")
      *
-     * This function returns a help text for individuals and families.
+     * The same table for the book (latex) and the templates of individuals and families of the chart
+     * (individuals, families); only the introduction differs. The full description is docs/templates.md.
      * Do not include here " or \" but only ' or \'
      *
-     * @param string $s
+     * @param string $s latex, individuals or families
      * @return string
      */
     public function getHelpText($s)
     {
-        $help_array["individuals"] = array(
-            array(
-                'GivenName',
-                '',
-                I18N::translate('position list of given names') . ', \'.\' ' .
-                    I18N::translate('for abbreviation'),
-                '@GivenName&1,2,3.@'
-            ),
-            array('SurName', '', '-', '@SurName@'),
-            array('NickName', '', '-', '@NickName@'),
-            array(
-                'BirthDate, DeathDate, FeFactDate', '',
-                I18N::translate('PHP date format specification'),
-                '@DeathDate&%j.%n.%Y@'
-            ),
-            array(
-                'BirthPlace, DeathPlace, FeFactPlace', '',
-                I18N::translate('list of positions, exclusion followed after') . ' /',
-                '@DeathPlace&2,3/USA@'
-            ),
-            array(
-                'FactXXXX', '',
-                I18N::translate('position in the ordered fact list'),
-                '@FactOCCU&1,2,-1@'
-            ),
-            array(
-                'Portrait', '',
-                'fallback ' . I18N::translate('or') . ' silhouette',
-                '@Portrait&fallback@'
-            ),
-            array(
-                'PortraitIcon',
-                I18N::translate('GraphML only: embeds the portrait in the file and shows it as icon of the box'),
+        // name(s), description, format, example (the examples use the characters @ and &)
+        $help_array = array(
+            array('GivenName', I18N::translate('Given names'),
+                I18N::translate('positions of the given names written in full, “.” abbreviates the others'),
+                '@GivenName&1,.@'),
+            array('SurName', I18N::translate('Surname (in a loop @ForeachNAME@ the surname of that name)'), '-', '@SurName@'),
+            array('NickName', I18N::translate('Nickname'), '-', '@NickName@'),
+            array('FatherGivenName, MotherGivenName, SpouseGivenName',
+                I18N::translate('Given names of the father or mother (in a loop @ForeachFAMC@ of that family) or of the spouse (loop @ForeachFAMS@)'),
+                I18N::translate('as for GivenName'), '@FatherGivenName&1@'),
+            array('FatherSurName, MotherSurName, SpouseSurName', I18N::translate('Surname of the father, mother or spouse'), '-', '@SpouseSurName@'),
+            array('BirthDate, DeathDate, MarriageDate, FeFactDate', I18N::translate('Date'),
+                I18N::translate('date format of webtrees, e.g. %%j.%%n.%%Y or %%Y; without format the default date format, without default date format the date is empty'),
+                '@BirthDate&%Y@'),
+            array('BirthPlace, DeathPlace, MarriagePlace, FeFactPlace', I18N::translate('Place'),
+                I18N::translate('positions in the place (-1 = the last one); /name leaves this name out; without format the default place format'),
+                '@BirthPlace&1,-1/Deutschland@'),
+            array('Marriage', I18N::translate('No text, but counts as data if the family has a marriage'), '-', '{⚭@Marriage@}'),
+            array('FactXXXX', I18N::translate('Value of the facts with the tag XXXX, e.g. FactOCCU'),
+                I18N::translate('positions in the list of these facts sorted by date (-1 = the last one); without format all values without separator'),
+                '@FactOCCU&1,-1@'),
+            array('Id, FatherId, MotherId, SpouseId', I18N::translate('Number of the individual'), 'gen_no, no, xref', '@Id&xref@'),
+            array('Reference', I18N::translate('Relationship to the reference individual (with the reference symbols)'), '-', '@Reference@'),
+            array('Ancestor', I18N::translate('Ancestors and descendants of ancestors'),
+                I18N::translate('Symbol for ancestors & symbols for descendants of ancestors'), '@Ancestor&*&**@'),
+            array('Link', I18N::translate('Link to second branch with individuum'), '-', '@Link@'),
+            array('LinkId', I18N::translate('LaTeX only: label of the entry of the individual in the second branch (empty without @Link@)'),
+                'gen_no, no, xref', '\pageref{@LinkId&xref@}'),
+            array('Portrait', I18N::translate('File name of the portrait'), 'fallback, silhouette', '@Portrait&fallback@'),
+            array('PortraitSize', I18N::translate('Height of the portrait for a width (w) or width for a height (h), in pixels'),
+                I18N::translate('w or h with the size & value without portrait'), '@PortraitSize&w30&20@'),
+            array('PortraitIcon', I18N::translate('GraphML only: embeds the portrait in the file and shows it as icon of the box'),
                 I18N::translate('width in pixels (default 100) & top or left & jpg or png & sharpness 1 to 20 (default 8)'),
-                '@PortraitIcon&30&left&jpg&8@'
-            ),
-            array('Gedcom', '', '-', '@Gedcom@'),
-            array(
-                'Reference',
-                I18N::translate('Link to the reference individual'),
-                '', '@Reference@'
-            ),
-            array(
-                'Link',
-                I18N::translate('Link to second branch with individuum'),
-                '', '@Link@'
-            ),
-            array(
-                'LinkId',
-                I18N::translate('LaTeX only: label of the entry of the individual in the second branch (empty without @Link@)'),
-                'no, gen_no or xref',
-                '\pageref{@LinkId&xref@}'
-            ),
-            array(
-                'Remove', '',
-                I18N::translate('String to be removed'),
-                '@Remove&,@'
-            ),
-            array(
-                'Replace', '',
-                I18N::translate('String to be replaced & replacement'),
-                '@Replace&:&\\@'
-            ),
-            array(
-                'Ancestor',
-                I18N::translate('Ancestors and descendants of ancestors'),
-                I18N::translate('Symbol for ancestors & symbols for descendants of ancestors'),
-                '@Ancestor&*&**@'
-            ),
-            array(
-                'ForeachNAME',
-                I18N::translate('Foreach loop over all names of an individual'),
-                'Type', '@ForeachNAME&_MARNM@'
-            ),
-            array(
-                'ForeachFAMS',
-                I18N::translate('Foreach loop over families where individual is a spouse'),
-                '-', '@ForeachFAMS@'
-            ),
-            array(
-                'ForeachFAMC',
-                I18N::translate('Foreach loop over families where individual is a child'),
-                '-', '@ForeachFAMC@'
-            ),
-            array(
-                'ForeachFactOuter',
-                I18N::translate('Foreach loop over fact types given as format'),
-                I18N::translate('Comma separated list of ordered facts & comma separated list of facts to be neglected (all everything excluded except the ordered list)'), '@ForeachFactOuter&OCCU,EDUC&all@'
-            ),
-            array(
-                'ForeachFactInner',
-                I18N::translate('Foreach loop over facts within in ForeachFactOuter loop'),
-                '-', '@ForeachFactInner@'
-            ),
-            array(
-                'FeFactType, FeAttributeType',
-                I18N::translate('Returns the fact type within a ForeachFactOuter loop'),
-                'IfExists or IfExist (nothing is returned if no facts exists)&prefix&postfix',
-                '@FeFactType&IfExists&\underline{&}:@'
-            ),
-            array(
-                'FeFactValue',
-                I18N::translate('Returns the fact value within a ForeachFactInner loop'),
-                '-', '@FeFactValue@'
-            ),
-            array(
-                'FeStepparents',
-                I18N::translate('Returns if a child is adopted in a ForeachFAMC loop'),
-                '-', '@FeStepparents@'
-            ),
-            array(
-                'FeStepchild',
-                I18N::translate('Returns if a child is adopted in a ForeachChildren loop'),
-                '-', '@FeStepchild@'
-            ),
-            array(
-                'ForeachMedia',
-                I18N::translate('Foreach loop over media object'),
-                '1. Comma separated list of types, 2. Comma separated list of formats, 3. unique if no duplicates',
-                '@ForeachMedia&photo&jpg,png@'
-            ),
-            array(
-                'FeMediaFile',
-                I18N::translate('Returns the media file name within a ForeachMedia loop'),
-                'NoExtension if extension should be removed', '@FeMediaFile&NoExtension@'
-            ),
-            array(
-                'FeMediaCaption',
-                I18N::translate('Returns the media title within a ForeachMedia loop'),
-                '-', '@FeMediaCaption@'
-            ),
-            array(
-                'ForeachReference',
-                I18N::translate('Foreach loop over references'),
-                '-',
-                '@ForeachReferences@'
-            ),
-            array(
-                'FeReferenceName',
-                I18N::translate('Returns the reference id within a ForeachReference loop'),
-                '-', '@FeReferenceName@'
-            ),
-            array(
-                'Counter',
-                I18N::translate('Counter in foreach loop'),
-                '-', '@Counter@'
-            )
+                '@PortraitIcon&30&left&jpg&8@'),
+            array('Gedcom', I18N::translate('GEDCOM of the record'), '-', '@Gedcom@'),
+            array('Counter', I18N::translate('Counter in foreach loop'), '-', '@Counter@'),
+            array('Remove', I18N::translate('Removes texts at the end of the text written so far'), I18N::translate('String to be removed'), '@Remove&, @'),
+            array('Replace', I18N::translate('Replaces a text at the end of the text written so far'), I18N::translate('String to be replaced & replacement'), '@Replace&:&.@'),
+            array('ForeachFAMC', I18N::translate('Foreach loop over families where individual is a child'), '-', '@ForeachFAMC@...@EndForeach@'),
+            array('ForeachFAMS', I18N::translate('Foreach loop over families where individual is a spouse'), '-', '@ForeachFAMS@...@EndForeach@'),
+            array('ForeachChildren', I18N::translate('Foreach loop over the children of the family (in a loop @ForeachFAMS@)'), '-', '@ForeachChildren@...@EndForeach@'),
+            array('FeStepparents, FeStepchild',
+                I18N::translate('Adoption of the child in the family (stepparents, stepfather, stepmother) in a loop @ForeachFAMC@ resp. @ForeachChildren@'),
+                '-', '@FeStepchild@'),
+            array('ForeachNAME', I18N::translate('Foreach loop over all names of an individual'), I18N::translate('Type of the name, _MARNM for married names'),
+                '@ForeachNAME&_MARNM@...@EndForeach@'),
+            array('ForeachFactOuter', I18N::translate('Foreach loop over fact types given as format'),
+                I18N::translate('Comma separated list of ordered facts & comma separated list of facts to be neglected (all everything excluded except the ordered list)'),
+                '@ForeachFactOuter&OCCU,EDUC&all@'),
+            array('ForeachFactInner', I18N::translate('Foreach loop over facts within in ForeachFactOuter loop'), '-', '@ForeachFactInner@'),
+            array('ForeachAttributeOuter', I18N::translate('Foreach loop over the given attributes of the fact in a loop @ForeachFactInner@'),
+                I18N::translate('comma separated list of tags'), '@ForeachAttributeOuter&ADDR,PHON@'),
+            array('FeFactType, FeAttributeType', I18N::translate('Returns the fact type within a ForeachFactOuter loop'),
+                I18N::translate('IfExists or IfExist (nothing is returned if no facts exists)&prefix&postfix'),
+                '@FeFactType&IfExists&\underline{&}:@'),
+            array('FeFactValue', I18N::translate('Returns the fact value within a ForeachFactInner loop'), '-', '@FeFactValue@'),
+            array('FeFactNote', I18N::translate('Note of the fact in a loop @ForeachFactInner@'), '-', '@FeFactNote@'),
+            array('FeFactAttribute', I18N::translate('Value of the attribute in a loop @ForeachAttributeOuter@'), I18N::translate('date or place format for DATE and PLAC'), '@FeFactAttribute@'),
+            array('ForeachMedia', I18N::translate('Foreach loop over media object'),
+                I18N::translate('Comma separated list of types & comma separated list of file extensions & unique if no duplicates'),
+                '@ForeachMedia&photo&jpg,png&unique@'),
+            array('FeMediaFile', I18N::translate('Returns the media file name within a ForeachMedia loop'),
+                I18N::translate('NoExtension if extension should be removed'), '@FeMediaFile&NoExtension@'),
+            array('FeMediaId', I18N::translate('Unique ID of the media file in a loop @ForeachMedia@, e.g. for a label'), '-', '\label{fig:@FeMediaId@}'),
+            array('FeMediaCaption', I18N::translate('Returns the media title within a ForeachMedia loop'), '-', '@FeMediaCaption@'),
+            array('ForeachReference', I18N::translate('Foreach loop over references'), '-', '@ForeachReference@...@EndForeach@'),
+            array('FeReferenceName', I18N::translate('Returns the number of the source within a ForeachReference loop, for \cite'), '-', '\cite{@FeReferenceName@}'),
         );
-        $help_array["families"] = array(
-            array(
-                'MarriageDate',
-                '',
-                I18N::translate('PHP date format specification'),
-                '@MarriageDate&%j.%n.%Y@'
-            ),
-            array(
-                'MarriagePlace',
-                '',
-                I18N::translate('list of positions, exclusion followed after') . ' /',
-                '@MarriagePlace&2,3/USA@'
-            ),
-            array(
-                'Marriage',
-                '',
-                '-',
-                '@Marriage@'
-            ),
-            array(
-                'FactXXXX',
-                '',
-                I18N::translate('position in the ordered fact list'),
-                '@FactOCCU&1,2,-1@'
-            ),
-            array(
-                'Gedcom',
-                '',
-                '-',
-                '@Gedcom@'
-            ),
-            array(
-                'Remove',
-                '',
-                I18N::translate('String to be removed'),
-                '@Remove&,@'
-            )
-        );
-        $help_array["latex"] = $help_array["individuals"];
-        array_push(
-            $help_array["latex"],
-            array(
-                'FatherGivenName, MotherGivenName, SpouseGivenName',
-                '',
-                I18N::translate('position list of given names') . ', \'.\' ' .
-                    I18N::translate('for abbreviation'),
-                '@GivenName&1,2,3.@'
-            ),
-            array(
-                'FatherSurName, MotherSurName, SpouseSurName',
-                '',
-                '-',
-                '@SurName@'
-            ),
-            array(
-                'Id, FatherId, MotherId, SpouseId',
-                '',
-                'no, gen_no or xref',
-                '@Id&gen_no@'
-            ),
-            array(
-                '',
-                '',
-                I18N::translate(''),
-                '@@'
-            )
+
+        $intro = array(
+            'latex' => I18N::translate('Templates of the book: the field “Node label” is the entry of an individual, families are written in it with loops.'),
+            'individuals' => I18N::translate('Templates of the boxes of the individuals in the chart.'),
+            'families' => I18N::translate('Templates of the family nodes in the chart: placeholders of families (Marriage, MarriageDate, MarriagePlace, FactXXXX, Gedcom), loops over the children and the facts of the family.'),
         );
 
         $help_text =
             '<table class=\'facts_table width50\'>' .
-            '<td class=\'optionbox\' colspan=\'5\'>' . I18N::translate(
-                'List of allowed keywords to be used in the templates.'
-            ) . ' ' .
+            '<td class=\'optionbox\' colspan=\'5\'>' . ($intro[$s] ?? '') . ' ' .
             I18N::translate(
                 'The first four characters within a template define the brackets used to group tag areas and the identifier for a tag and the format part, e.g. {}@&.'
-            ) .
-            'Text inside brackets are only included if the text includes a resolved tag.' .
-            'Double brackets will hide if resolved tags to the outside.' .
+            ) . ' ' .
+            I18N::translate('Text inside brackets is only included if a placeholder in it has data. Double brackets hide resolved placeholders to the outside.') . ' ' .
+            I18N::translate('Line breaks of the template become spaces.') . ' ' .
+            I18N::translate('Full description with examples: %s', '<a href=\'https://github.com/ThorstenOest/ExportFamilyBook/blob/main/docs/templates.md\' target=\'_blank\' rel=\'noopener\'>docs/templates.md</a>') .
             '<br><br><table border=\'1\'>' .
-            '<tr><th>' . I18N::translate('Tag') . '</th><th>' .
+            '<tr><th>' . I18N::translate('Placeholder') . '</th><th>' .
             I18N::translate('Description') . '</th><th>' .
             I18N::translate('Format') . '</th><th>' .
             I18N::translate('Example given identifier @&') . '</th></tr>';
 
-        foreach ($help_array[$s] as $this_help) {
+        foreach ($help_array as $this_help) {
             $help_text .= '<tr><td>' . $this_help[0] .
                 '</td><td>' . $this_help[1] .
                 '</td><td>' . $this_help[2] .

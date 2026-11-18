@@ -316,83 +316,20 @@ When the page is opened (`<type>` is `latex` or `graphml`), the first existing s
 
 Sources 3 to 5 are alternatives: only the first existing file of them is used.
 
-## Notes on the templates
+## Templates
 
-### `IfExists` and `IfExist`
+The text of the book and of the boxes of the chart is made from templates with placeholders like
+`@SurName@` or `@BirthDate&%Y@`. The template language (all placeholders, formats, loops and blocks, with
+examples, recipes and the common errors) is described in **[docs/templates.md](docs/templates.md)**.
+The button "Open Help Window" on the export pages and the icon "?" next to "Template for ..." show a short
+version in the module (in German if webtrees runs in German).
 
-`@FeFactType&IfExists@` and `@FeAttributeType&IfExists@` return nothing if the individual has no fact of
-this type. Both spellings work: `IfExists` (as in the help of the form) and `IfExist` (older templates).
-
-### Which picture is the portrait
-
-All portrait placeholders (`@Portrait@`, `@PortraitSize@`, `@PortraitIcon@`, in LaTeX and GraphML) use the same
-picture: the first picture of the individual (order of the media objects of the individual, then of the
-files of a media object) that
-
-- is a picture file (JPEG, PNG, GIF, ...) and no external file (web address), and
-- has the media type *Photo* or no media type (GEDCOM: `TYPE` below `FORM`, upper or lower case).
-
-Pictures of other types (certificate, document, ...) are skipped, so a certificate is no longer the portrait
-of an individual without photo. Without such a picture the individual has no portrait (as without any
-picture; `@Portrait&fallback@` gives the silhouette). This does not change the pictures of the book
-(`@ForeachMedia@`) nor the list of excluded pictures of the image selection.
-
-### Special characters in the LaTeX export
-
-Data from webtrees (names, places, dates, facts, notes, captions of pictures, titles and authors of sources)
-may contain characters with a special meaning in LaTeX. The export masks them, so they appear in the book as
-they are written in webtrees:
-
-| Character in webtrees | In the `.tex` file |
-|---|---|
-| `\` | `\textbackslash ` |
-| `{` `}` | `\{` `\}` |
-| `~` | `\textasciitilde{}` (prints a tilde, e.g. in `*~` or in a web address, not a space) |
-| `&` `$` `%` `_` `#` `^` `\|` `§` | `\&` `\$` `\%` `\_` `\#` `\^` `\textbar` `\§` |
-| `...` | `\ldots` |
-| `"` | `"{}` |
-| line break in a note | `\\` |
-
-In the bibliography (the `.bib` part of the file) the title and the author of a source are masked in the
-same way, with `\textbraceleft{}`/`\textbraceright{}` for braces and `\textquotedbl{}` for `"`, because
-BibTeX itself needs balanced braces and ends a value at `"`.
-
-Nothing is masked in the text of the templates, the preamble, title and epilog, the symbols, the
-relationship symbols and the names of the branches: they are LaTeX written on purpose. The name of a branch
-is therefore used unchanged as heading and for `@Link@`. File names (`@FeMediaFile@`, `@Portrait@`) keep
-`{`, `}` and `~`, because these are valid characters of a path; use `\detokenize{...}` around a path in
-`\includegraphics` as in the example template.
-
-### Labels of individuals that connect two branches
-
-An individual where one branch ends and another begins (start or stop individual of a branch, see
-[Branches](#branches)) has a full entry in both branches, with the name of the other branch for `@Link@`.
-LaTeX allows each label only once, so only one of the two entries defines the label of the individual
-(the main label); the other entry gets a label of its own:
-
-- The main label stays with the entry in the individual's own branch (the later branch of the list). If this
-  branch is switched off, the entry in the other branch defines it.
-- `@Id&...@` directly inside `\label{...}` returns in the second entry the main label followed by `/` and the
-  number of the branch of this entry, e.g. `\label{I12/1}`. A `/` never occurs in an XREF, so this label is
-  never the label of another individual.
-- `\pageref{@Id&xref@}` and all other references to the individual (`@FatherId@`, `@MotherId@`, `@SpouseId@`,
-  children, summary) point to the main label. Everything else of the second entry stays as it is (number,
-  index entry, sources, pictures).
-- `@LinkId@` returns the label of the entry of the individual in the other branch: in the entry with the main
-  label the label of the second entry, in the second entry the main label. Use it for a page number next to
-  `@Link@`, so the link works in both directions:
-
-      <\segoe{🔗} @Link@< S.\pageref{@LinkId&xref@}>\\ >
-
-  The format is the same as for `@Id@` (`no`, `gen_no` or `xref`; use the same as in `\label{@Id&...@}`).
-  `@LinkId@` is empty if `@Link@` is empty or the other entry is not exported, so the `<...>` block is left
-  out. It never points to a label that is not in the book (as long as the template defines
-  `\label{@Id&...@}`). In GraphML it returns nothing.
-- Limit: an individual whose copies are in several other branches links only to one of them (the last one
-  found); `@Link@` and `@LinkId@` of the entry in the own branch show this branch.
-
-Existing templates need no change. The labels of pictures (`\label{fig:@FeMediaId@}`) are not affected: with
-`@ForeachMedia&...&...&unique@` each picture is placed only once anyway.
+Topics that used to be notes in this README are now in the reference:
+[`IfExists` and `IfExist`](docs/templates.md#fact-loops),
+[which picture is the portrait](docs/templates.md#portraits),
+[special characters in the LaTeX export](docs/templates.md#special-characters),
+[labels of individuals that connect two branches](docs/templates.md#labels-and-links-in-the-book-latex) and
+[errors in a template](docs/templates.md#common-errors).
 
 ### Portraits in the family tree chart
 
@@ -409,7 +346,7 @@ pictures is needed on the computer that runs yEd. Tested with yEd 3.25.1 (JPEG a
 | type | `jpg` (quality 92) or `png` (lossless, larger files) | `jpg` |
 | sharpness | `1` to `20`: the picture is stored with this many times the pixels of the width (other values: the default) | `8` |
 
-- The portrait is the first photo of the individual (see [Which picture is the portrait](#which-picture-is-the-portrait)).
+- The portrait is the first photo of the individual (see [Portraits](docs/templates.md#portraits)).
   The module reduces the original file
   (turned as given by its EXIF orientation) and encodes it once, JPEG with quality 92 or lossless PNG.
   A picture higher than 1.5 times its width is reduced to this height.
@@ -540,7 +477,8 @@ such an individual are not changed, e.g. a couple without children keeps its nod
 
 A typing error in a template (a bracket that is not closed, a loop without `@EndForeach@`, a placeholder that
 does not exist) or a wrong value in the list of branches does not create a file. The page shows the form again
-with the values entered and a message that names the error.
+with the values entered and a message that names the error. The messages of the templates and other frequent
+mistakes are listed in [Common errors](docs/templates.md#common-errors).
 
 ### Pictures that are skipped
 
@@ -584,6 +522,17 @@ Notes:
 - The message "Please (re)run BibTeX" of biblatex may remain after the last run when `citecounter`
   is used. The list of sources is complete nevertheless.
 - A large tree with many pictures needs several minutes per run.
+
+LaTeX packages and fonts: everything the book needs is loaded in the field *Preamble*, so a preamble of your
+own decides what has to be installed. The example preamble uses the document class `scrbook` (KOMA-Script) and
+the packages `geometry`, `underscore`, `morefloats`, `fontspec`, `paralist`, `graphicx`, `grffile`, `xcolor`,
+`mdframed`, `babel` (`ngerman`), `makeidx` and `biblatex` (with `backend=bibtex8`, hence the run of `bibtex8`),
+and the fonts named in step 2. The export itself adds two things after the preamble:
+
+- the command `\GedcomLegende` (the legend made from the field *Symbols*), a list `compactenum` of the package
+  `paralist`, if a row of the symbols has a third column;
+- `\usepackage{filecontents}` and the list of sources in a `filecontents` environment, written to
+  `<name of the .tex file>.bib` on the first run (therefore `\bibliography{\jobname}` in the preamble).
 
 ### Family tree chart: `.graphml` to PDF with yEd
 
