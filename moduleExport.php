@@ -13,6 +13,8 @@ use Fisharebest\Webtrees\Registry;
 use Fisharebest\Webtrees\I18N;
 use Fisharebest\Webtrees\Individual;
 use Fisharebest\Webtrees\Family;
+use Fisharebest\Webtrees\Fact;
+use Fisharebest\Webtrees\MediaFile;
 use Fisharebest\Webtrees\Date;
 use Fisharebest\Webtrees\DB;
 use Illuminate\Database\Query\Expression;
@@ -444,7 +446,7 @@ class ExportFamilyBookData
      *        	If $format = "silhouette" then allways the fallback
      *        	picture is used. If $format = "fallback" then the portrait is used and only
      *        	if this is not defined the fallback picture is used.
-     * @param string $servername
+     * @param bool $servername
      *        	If $servername = true then the server file name
      *        	including the path is returned.
      * @return string The file name of the portrait
@@ -452,6 +454,7 @@ class ExportFamilyBookData
     private function getPortrait($record, $format, $servername = false)
     {
         $portrait_file = "";
+        $portrait_fallback = "";
 
         // get the fallback picture
         // the name is defined in the report form
@@ -1103,6 +1106,7 @@ class ExportFamilyBookData
                 );
             }
 
+            $template_array = array();
             $i = 1;
             $pos_end = 3;
             $pos = 0;
@@ -1414,9 +1418,9 @@ class ExportFamilyBookData
     /**
      * Get the value of level 2 data in the fact
      *
-     * @param fact $fact
+     * @param Fact $fact
      * @param string $tag
-     * @param number $level
+     * @param int $level
      *
      * @return string|null
      */
@@ -1433,8 +1437,8 @@ class ExportFamilyBookData
     /**
      * Get information about adoption fact and a given family
      *
-     * @param Fact $child
-     * @param Family $FAMC
+     * @param Fact $fact
+     * @param Family|null $FAMC
      *
      * @return string|null
      */
@@ -1465,12 +1469,11 @@ class ExportFamilyBookData
     }
 
     /**
-     * set the information in the generationInd array
+     * Check if a child is adopted in a family
      *
-     * @param Individual $child child record
+     * @param Individual|null $child child record
      * @param Family $FAMC family the child belongs to
-     * @param Individual $parent parent of the child
-     * @param boolean $related_by_blood determines which individuals are set
+     * @param Individual|null $parent parent of the child
      * @return string Information about the adoption
      */
     private function checkADOP($child, $FAMC, $parent = null)
@@ -1507,9 +1510,9 @@ class ExportFamilyBookData
      *
      * This module returns a format element or "".
      *
-     * @param array $format Format array
+     * @param array<string> $format Format array
      * @param integer $i Array element
-     * @return array element or empty string
+     * @return string element or empty string
      */
     private function get_format($format, $i)
     {
@@ -1657,15 +1660,16 @@ class ExportFamilyBookData
      *
      * This module substitutes place holders in templates for individuals.
      *
-     * @param GedcomRecord $record
-     *        	The record for which the template should be filled (Individual, Family,..)
-     * @param GedcomRecord $record_context
+     * @param GedcomRecord|Fact|MediaFile|string $record
+     *        	The record for which the template should be filled (Individual, Family, a fact or
+     *        	media file in a loop, ...)
+     * @param GedcomRecord|Fact $record_context
      *        	The context record, e.g. the individual for which the FAMS should be taken.
      * @param string $template
      *        	The template with place holders to be replaced
      * @param array $brackets
      *        	Left and right brackets to define tag block
-     * @param string $fact_symbols
+     * @param array<string,string> $fact_symbols
      *        	List of symbols to the used for facts
      * @param integer $counter
      *        	Counter of foreach loop
@@ -1687,6 +1691,7 @@ class ExportFamilyBookData
     ) {
         if (!isset($this->media_included)) $this->media_included = array();
 
+        $FAMC = array();
         if ($record instanceof Individual) {
             $FAMC = $this->childFamilies($record);
         } else if ($record instanceof Family) {
@@ -2572,7 +2577,7 @@ class ExportFamilyBookData
             }
         }
 
-        foreach ($replacements as $r) {
+        foreach ($replacements ?? array() as $r) {
             $subject = preg_replace($r[0], $r[1], (string) $subject);
         }
 
@@ -2622,8 +2627,6 @@ class ExportFamilyBookData
      * get Records for individuals and families
      * this is stored in the table sources
      *
-     * @param Tree $tree
-     *        	The family tree to be considered
      * @return string with all references
      */
     private function getReferences()
@@ -2671,7 +2674,7 @@ class ExportFamilyBookData
      * @param array $inds List of individuals
      * @param integer $branch branch number
      * @param boolean $related_by_blood determines which individuals are set
-     * @return null
+     * @return void
      */
     private function setFAMSFAMC($inds, $branch, $related_by_blood)
     {
@@ -2925,13 +2928,7 @@ class ExportFamilyBookData
             ->select(['i_id AS xref', 'i_gedcom AS gedcom', new Expression("'INDI' AS type")])
             ->get();
 
-        // Get all family records
-        $rowsFam = DB::table('families')
-            ->where('f_file', '=', $this->tree->id())
-            ->orderBy('f_id')
-            ->select(['f_id AS xref', 'f_gedcom AS gedcom', new Expression("'FAM' AS type")])
-            ->get();
-
+        $xrefInd = array();
         foreach ($rowsInd as $row) {
             // create the record from the data already read, this avoids one database query per individual
             $individual = Registry::individualFactory()->make($row->xref, $this->tree, $row->gedcom);
@@ -2939,9 +2936,6 @@ class ExportFamilyBookData
             if ($this->canExport($individual)) {
                 $xrefInd[] = $row->xref;
             }
-        };
-        foreach ($rowsFam as $row) {
-            $xrefFam[] = $row->xref;
         };
 
         // loop over families to start with a new branch
@@ -3102,7 +3096,7 @@ class ExportFamilyBookData
             }
 
             // now sort for branches and generations
-
+            $a_branch = $a_sub_branch = $a_generation = $a_name = $a_givenname = array();
             foreach ($this->generationInd as $key => $row) {
                 $a_branch[$key] = $row['branch'];
                 $a_sub_branch[$key] = $row['sub_branch_id'];
@@ -3138,9 +3132,13 @@ class ExportFamilyBookData
                 $last_branch = $branch;
                 if ($generation < $min_gen_of_branch[$branch]) $min_gen_of_branch[$branch] = $generation;
             }
-            // now add ids
+            // now add ids (the variables of the previous individual are set by the first one)
             $no = 0;
             $gen_no = 0;
+            $sub_branch_no = 0;
+            $last_sub_branch_id = null;
+            $last_gen = null;
+            $number_of_inds = array();
             $last_branch = array_values($this->generationInd)[0]['branch'] - 1;
             // generation range, used to count same symbols in the reference
             $ng = max($a_generation) - min($a_generation);
