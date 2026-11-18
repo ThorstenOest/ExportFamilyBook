@@ -36,15 +36,20 @@ use RuntimeException;
 use UnexpectedValueException;
 
 /**
- * Main class for FamilyBookExport module
+ * The module: menu "Family book", its pages and forms
  */
 class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, ModuleMenuInterface
 {
-
     use ModuleCustomTrait;
     use ModuleMenuTrait;
     use ExportFamilyBookBranches;
     use ExportFamilyBookProfiles;
+
+    // Metadata shown in Control panel > Modules (see customModule...). The version of a release is set
+    // here and in latest-version.txt; "-dev" marks a state between releases.
+    private const CUSTOM_VERSION = '3.0.0-dev';
+    private const AUTHOR_NAME = 'ThorstenOest';
+    private const GITHUB_REPOSITORY = 'ThorstenOest/ExportFamilyBook';
 
     // Access level if Control panel > Modules > Menus has no entry for this module and tree: managers only.
     // webtrees 2.2 has no defaultAccessLevel(); AbstractModule::accessLevel() falls back to this property.
@@ -224,12 +229,35 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
     public function title(): string
     {
-        return I18N::translate('Export Family Book (Latex / GraphML)');
+        return I18N::translate('Family book (LaTeX / GraphML)');
     }
 
     public function description(): string
     {
-        return I18N::translate('This is a module to export a tree in Latex (as family book) or GraphML (as chart) format.');
+        return I18N::translate('Exports a tree as family book (LaTeX) or as family tree chart (GraphML for yEd).');
+    }
+
+    public function customModuleAuthorName(): string
+    {
+        return self::AUTHOR_NAME;
+    }
+
+    public function customModuleVersion(): string
+    {
+        return self::CUSTOM_VERSION;
+    }
+
+    /**
+     * Text file with the latest version, read by the control panel (Modules > All modules)
+     */
+    public function customModuleLatestVersionUrl(): string
+    {
+        return 'https://raw.githubusercontent.com/' . self::GITHUB_REPOSITORY . '/main/latest-version.txt';
+    }
+
+    public function customModuleSupportUrl(): string
+    {
+        return 'https://github.com/' . self::GITHUB_REPOSITORY;
     }
 
     /**
@@ -243,6 +271,8 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         if (str_starts_with($language, 'de')) {
             return [
                 'Family book' => 'Familienbuch',
+                'Family book (LaTeX / GraphML)' => 'Familienbuch (LaTeX / GraphML)',
+                'Exports a tree as family book (LaTeX) or as family tree chart (GraphML for yEd).' => 'Exportiert einen Stammbaum als Familienbuch (LaTeX) oder als Stammbaum-Grafik (GraphML für yEd).',
                 'Shape' => 'Form',
                 'Export running … The download starts when the file is ready. This can take a few minutes.' => 'Export läuft … Der Download beginnt, sobald die Datei fertig ist. Das kann einige Minuten dauern.',
                 'Book (LaTeX)' => 'Buch (LaTeX)',

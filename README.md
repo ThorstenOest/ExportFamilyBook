@@ -1,5 +1,32 @@
 # ExportFamilyBook
-A Module for Webtrees 2.0 to export a tree as a family book or graphml file
+
+A custom module for [webtrees](https://webtrees.net) 2.2 that exports a family tree as a family book
+(LaTeX, `.tex`) or as a family tree chart (GraphML, `.graphml` for yEd).
+
+## Requirements
+
+- webtrees 2.2
+- PHP as required by webtrees 2.2 (PHP 8.3 or newer)
+- The PHP extension GD for portraits embedded in the family tree chart (`@PortraitIcon@`); webtrees uses it
+  for thumbnails anyway
+- To turn the exported files into a PDF: a LaTeX system (e.g. MiKTeX) resp. yEd, see
+  [From the exported file to a PDF](#from-the-exported-file-to-a-pdf)
+
+Versions up to 2.0 of this module were made for webtrees 2.0/2.1 and do not run with webtrees 2.2.
+
+## Installation
+
+1. Copy the folder `ExportFamilyBook` with all its files into the folder `modules_v4/` of your webtrees
+   installation, so that `modules_v4/ExportFamilyBook/module.php` exists.
+   The folder name must not contain a dot: webtrees ignores module folders like `ExportFamilyBook-3.0.0`
+   (the name of a GitHub download), so rename such a folder to `ExportFamilyBook`.
+2. Control panel → Modules → **Menus**: check that "Family book" is enabled and set the access level per tree
+   (without an entry only managers can use the module, see below).
+
+To update, copy the new files over the old ones. The settings of your trees are kept: they are stored in the
+webtrees data folder (see [Default settings of a tree](#default-settings-of-a-tree-files-in-the-data-folder)).
+Do not delete your own `export_*_settings.local.json` in the module folder, if you have one (see
+[Where the form gets its values](#where-the-form-gets-its-values)).
 
 ## Usage
 
