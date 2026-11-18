@@ -852,5 +852,4 @@ trait ExportFamilyBookBranches
 
         return $set;
     }
-
 }
