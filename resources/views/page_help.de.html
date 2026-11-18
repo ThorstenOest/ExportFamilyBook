@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Hilfe – Familienbuch</title>
+<style>
+    body { font-family: sans-serif; font-size: 14px; line-height: 1.4; margin: 1em 1.5em; }
+    h1 { font-size: 1.4em; } h2 { font-size: 1.15em; margin-top: 1.5em; } h3 { font-size: 1em; }
+    code, pre { font-family: monospace; background: #f3f3f3; }
+    pre { padding: .5em; white-space: pre-wrap; }
+    table { border-collapse: collapse; margin: .5em 0; }
+    th, td { border: 1px solid #ccc; padding: 2px 6px; text-align: left; vertical-align: top; }
+</style>
+</head>
+<body>
+<h1>Hilfe: Templates für Buch und Grafik</h1>
+
+<p>Die vollständige Referenz mit allen Formatangaben und vielen Beispielen:
+<a href="https://github.com/ThorstenOest/ExportFamilyBook/blob/main/docs/templates.md" target="_blank" rel="noopener">Templates of ExportFamilyBook</a>
+(GitHub, Englisch). Die README des Moduls beschreibt Profile, Zweige, die Bilderauswahl und den Weg zum PDF.</p>
+
+<h2>Welches Feld wofür</h2>
+<table>
+<tr><th>Feld</th><th>Inhalt</th></tr>
+<tr><td>Buch: Preamble, Title, Epilog</td><td>LaTeX, wird unverändert übernommen: Anfang der Datei, Titelseite, Ende (Literaturverzeichnis, Index, <code>\end{document}</code>)</td></tr>
+<tr><td>Buch: Section summary label</td><td>Template, wird am Anfang eines Zweigs auf jede Person angewendet (z. B. eine Liste der Personen, die zwei Zweige verbinden); darf leer bleiben</td></tr>
+<tr><td>Buch: Node label</td><td>Template für den Eintrag einer Person; Familien stehen darin mit <code>@ForeachFAMS@</code></td></tr>
+<tr><td>Buch: Symbols</td><td>Symbole für Faktenarten (<code>@FeFactType@</code>) und die Legende <code>\GedcomLegende</code></td></tr>
+<tr><td>Buch: Default formats, Hierarchy levels</td><td>Datums- und Ortsformat für Platzhalter ohne Formatangabe; LaTeX-Befehle für die Überschriften der Zweige und Generationen</td></tr>
+<tr><td>Grafik: Node label, Node description</td><td>Templates für das Kästchen einer Person bzw. einen Familienknoten (Label: HTML, wenn es mit <code>&lt;html&gt;</code> beginnt)</td></tr>
+</table>
+<p>Die Datei des Buchs: Präambel, Legende, Quellenliste, Titel, dann je Zweig die Überschriften, die Zusammenfassung und die Einträge, zum Schluss der Epilog.</p>
+
+<h2>Grundregeln</h2>
+<ul>
+<li>Die <b>ersten vier Zeichen</b> eines Templates legen seine Sonderzeichen fest: öffnende und schließende Klammer eines Blocks,
+Platzhalterzeichen und Trennzeichen der Formatangaben. Buch: <code>&lt;&gt;@&amp;</code>, Grafik: <code>{}@&amp;</code>.
+Diese Zeichen können nicht als normaler Text verwendet werden.</li>
+<li>Ein <b>Platzhalter</b> ist ein Name zwischen zwei <code>@</code>, Formatangaben folgen nach <code>&amp;</code>:
+<code>@BirthDate&amp;%Y@</code>. Groß- und Kleinschreibung zählt.</li>
+<li>Ein <b>Block</b> (Text in Klammern) entfällt ganz, wenn kein Platzhalter darin Daten hat:
+<code>&lt; in @BirthPlace@&gt;</code>. Blöcke lassen sich verschachteln. Doppelte Klammern <code>&lt;&lt;...&gt;&gt;</code> werden
+geschrieben, wenn sie Daten haben, zählen aber für den umgebenden Block nicht als Daten.</li>
+<li><b>Zeilenumbrüche</b> im Template werden zu Leerzeichen. Für einen Zeilenumbruch <code>\\</code> (LaTeX) oder <code>&lt;br&gt;</code> (HTML) schreiben.</li>
+<li>Eine <b>Schleife</b> wiederholt ihren Text: <code>@ForeachFAMS@ ... @EndForeach@</code>. Ein Durchlauf ohne Daten entfällt.
+Der Inhalt einer Schleife darf nicht nur aus einem einzigen Block bestehen: ein Leerzeichen davor schreiben.</li>
+<li>Ein Datum ohne Formatangabe nutzt das Standard-Datumsformat; <b>ohne Standard (in der Grafik immer) bleibt es leer</b>.</li>
+<li>Daten werden für LaTeX (<code>&amp;</code>, <code>%</code>, <code>_</code>, …) bzw. HTML maskiert, der Text der Templates nicht.</li>
+</ul>
+
+<h2>Beispiel</h2>
+<pre>&lt;&gt;@&amp;
+\textbf{@SurName@, @GivenName@}
+&lt; *@BirthDate@&lt; in @BirthPlace@&gt;&gt;
+&lt; \dejavu{†}@DeathDate@&gt;\\</pre>
+<p>ergibt zum Beispiel <code>\textbf{Muster, Anna Maria Luise} *3.3.1850 in Musterstadt \dejavu{†}20.11.1920\\</code>
+und <code>\textbf{Klein, Maria} \\</code> für eine Person ohne Daten.</p>
+
+<h2>Platzhalter</h2>
+<h3>Personen</h3>
+<table>
+<tr><th>Platzhalter</th><th>Bedeutung</th><th>Formatangaben, Beispiel</th></tr>
+<tr><td><code>@GivenName@</code></td><td>Vornamen</td><td>Positionen, <code>.</code> kürzt die übrigen ab: <code>@GivenName&amp;1,.@</code> → Anna M. L.</td></tr>
+<tr><td><code>@SurName@</code>, <code>@NickName@</code></td><td>Nachname, Rufname</td><td>–</td></tr>
+<tr><td><code>@BirthDate@</code>, <code>@DeathDate@</code></td><td>Geburts-, Sterbedatum</td><td>Datumsformat: <code>@BirthDate&amp;%Y@</code> → 1850, <code>%j.%n.%Y</code> → 3.3.1850</td></tr>
+<tr><td><code>@BirthPlace@</code>, <code>@DeathPlace@</code></td><td>Geburts-, Sterbeort</td><td>Positionen, <code>-1</code> = letzte, <code>/Name</code> lässt den Namen weg: <code>@BirthPlace&amp;1,-1/Deutschland@</code> → Musterstadt</td></tr>
+<tr><td><code>@FactOCCU@</code> (jedes Tag)</td><td>Wert der Fakten mit diesem Tag</td><td>Positionen in der Liste nach Datum: <code>@FactOCCU&amp;-1@</code> → der letzte Beruf; ohne Formatangabe werden die Werte aneinandergeklebt</td></tr>
+<tr><td><code>@Id@</code></td><td>Nummer der Person</td><td><code>gen_no</code> (Standard), <code>no</code> oder <code>xref</code>: <code>\label{@Id&amp;xref@}</code></td></tr>
+<tr><td><code>@FatherGivenName@</code>, <code>@FatherSurName@</code>, <code>@FatherId@</code>, <code>@MotherGivenName@</code>, <code>@MotherSurName@</code>, <code>@MotherId@</code></td><td>Vater, Mutter (in <code>@ForeachFAMC@</code> die dieser Familie)</td><td>wie <code>@GivenName@</code> bzw. <code>@Id@</code></td></tr>
+<tr><td><code>@Reference@</code></td><td>Verwandtschaft zur Bezugsperson, mit den Bezugssymbolen</td><td>–</td></tr>
+<tr><td><code>@Ancestor@</code></td><td>Symbol für direkte Vorfahren und Nachkommen, Symbol für andere Blutsverwandte</td><td><code>@Ancestor&amp;*&amp;**@</code></td></tr>
+<tr><td><code>@Link@</code></td><td>Name des anderen Zweigs einer Person, die zwei Zweige verbindet</td><td>–</td></tr>
+<tr><td><code>@LinkId@</code></td><td>nur Buch: Sprungmarke des Eintrags im anderen Zweig</td><td>wie <code>@Id@</code>: <code>\pageref{@LinkId&amp;xref@}</code></td></tr>
+<tr><td><code>@Portrait@</code></td><td>Dateiname des Portraits</td><td><code>fallback</code> oder <code>silhouette</code> (Standardportrait der Grafik)</td></tr>
+<tr><td><code>@PortraitSize@</code></td><td>andere Seite des Portraits in Pixeln</td><td><code>@PortraitSize&amp;w30&amp;20@</code>: Höhe zur Breite 30, 20 ohne Portrait</td></tr>
+<tr><td><code>@PortraitIcon@</code></td><td>nur Grafik: Portrait als Bild im Kästchen</td><td><code>@PortraitIcon&amp;Breite&amp;top|left&amp;jpg|png&amp;Schärfe@</code>, z. B. <code>@PortraitIcon&amp;30&amp;left@</code></td></tr>
+<tr><td><code>@Gedcom@</code></td><td>GEDCOM des Datensatzes</td><td>–</td></tr>
+</table>
+
+<h3>Familien (Grafik; Buch: innerhalb von <code>@ForeachFAMS@</code>)</h3>
+<table>
+<tr><th>Platzhalter</th><th>Bedeutung</th><th>Formatangaben, Beispiel</th></tr>
+<tr><td><code>@Marriage@</code></td><td>kein Text, zählt aber als Daten, wenn es eine Heirat gibt</td><td><code>&lt;⚭@Marriage@&gt;</code></td></tr>
+<tr><td><code>@MarriageDate@</code>, <code>@MarriagePlace@</code></td><td>Datum und Ort der Heirat</td><td>Datums- bzw. Ortsformat</td></tr>
+<tr><td><code>@SpouseGivenName@</code>, <code>@SpouseSurName@</code>, <code>@SpouseId@</code></td><td>der Ehepartner</td><td>wie <code>@GivenName@</code> bzw. <code>@Id@</code></td></tr>
+<tr><td><code>@FactNCHI@</code> (jedes Tag), <code>@Gedcom@</code></td><td>Fakten und GEDCOM der Familie</td><td>wie bei Personen</td></tr>
+</table>
+
+<h3>Text</h3>
+<table>
+<tr><th>Platzhalter</th><th>Bedeutung</th><th>Beispiel</th></tr>
+<tr><td><code>@Remove@</code></td><td>entfernt Texte am Ende des bisher geschriebenen Texts</td><td><code>@Remove&amp;, @</code></td></tr>
+<tr><td><code>@Replace@</code></td><td>ersetzt einen Text am Ende</td><td><code>@Replace&amp;:&amp;.@</code></td></tr>
+<tr><td><code>@Counter@</code></td><td>Nummer des Schleifendurchlaufs</td><td><code>@Counter@.</code></td></tr>
+</table>
+
+<h3>Schleifen (enden jeweils mit <code>@EndForeach@</code>)</h3>
+<table>
+<tr><th>Schleife</th><th>Wiederholt für</th><th>Platzhalter darin</th></tr>
+<tr><td><code>@ForeachFAMC@</code></td><td>jede Familie, in der die Person Kind ist</td><td>Vater und Mutter, <code>@FeStepparents@</code> (adoptiert: stepparents, stepfather, stepmother)</td></tr>
+<tr><td><code>@ForeachFAMS@</code></td><td>jede Familie, in der die Person Ehepartner ist</td><td>Ehepartner, Heirat, <code>@ForeachChildren@</code></td></tr>
+<tr><td><code>@ForeachChildren@</code></td><td>jedes Kind der Familie</td><td>alle Platzhalter für Personen, <code>@FeStepchild@</code></td></tr>
+<tr><td><code>@ForeachNAME&amp;_MARNM@</code></td><td>jeden Namen dieser Art (<code>_MARNM</code>: Ehenamen)</td><td><code>@SurName@</code> dieses Namens</td></tr>
+<tr><td><code>@ForeachFactOuter&amp;Reihenfolge&amp;ausgeschlossen@</code></td><td>jede Faktenart; <i>Reihenfolge</i>: diese Tags zuerst, <i>ausgeschlossen</i>: weggelassene Tags (<code>all</code>: alle übrigen)</td><td><code>@FeFactType@</code>, <code>@ForeachFactInner@</code></td></tr>
+<tr><td><code>@ForeachFactInner@</code></td><td>jedes Faktum dieser Art, nach Datum</td><td><code>@FeFactType@</code>, <code>@FeFactValue@</code>, <code>@FeFactDate@</code>, <code>@FeFactPlace@</code>, <code>@FeFactNote@</code>, <code>@ForeachAttributeOuter@</code></td></tr>
+<tr><td><code>@ForeachAttributeOuter&amp;ADDR,PHON@</code></td><td>jedes angegebene Attribut des Faktums</td><td><code>@FeAttributeType@</code>, <code>@FeFactAttribute@</code></td></tr>
+<tr><td><code>@ForeachMedia&amp;Arten&amp;Endungen&amp;unique@</code></td><td>jede Mediendatei, z. B. <code>@ForeachMedia&amp;photo&amp;jpg,png&amp;unique@</code></td><td><code>@FeMediaFile@</code> (<code>&amp;NoExtension</code>), <code>@FeMediaId@</code>, <code>@FeMediaCaption@</code></td></tr>
+<tr><td><code>@ForeachReference@</code></td><td>jede Quelle</td><td><code>@FeReferenceName@</code>: Nummer für <code>\cite{}</code></td></tr>
+</table>
+<p><code>@FeFactType@</code> und <code>@FeAttributeType@</code>: das Symbol aus dem Feld Symbols oder der Name des Tags;
+Formatangaben <code>IfExists&amp;Präfix&amp;Suffix</code> (Präfix und Suffix nur um einen Namen). Sie zählen nie als Daten.</p>
+
+<h2>Häufige Fehler</h2>
+<ul>
+<li>Der Export zeigt das Formular mit einer Meldung: ein Platzhalter, den es nicht gibt, eine Klammer, die nicht geschlossen wird, eine Schleife ohne <code>@EndForeach@</code>.</li>
+<li>Ein <code>&gt;</code> oder <code>}</code> im Text beendet den Block (z. B. <code>-&gt;</code> im Buch).</li>
+<li>Leere Daten in der Grafik: eine Formatangabe schreiben, z. B. <code>@BirthDate&amp;%Y@</code>.</li>
+<li>Eine Schleife schreibt nichts: ihr Inhalt ist ein einziger Block, oder sie hat keine Daten.</li>
+</ul>
+</body>
+</html>
