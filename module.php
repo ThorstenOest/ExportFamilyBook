@@ -5,13 +5,12 @@
  *
  */
 
-//namespace haduloha\ExportFamilyBook;
+namespace haduloha\ExportFamilyBook;
+
 require_once __DIR__ . '/moduleExport.php';
 require_once __DIR__ . '/moduleBranches.php';
 require_once __DIR__ . '/moduleProfiles.php';
 
-
-use Fisharebest\Webtrees\Webtrees;
 use Fisharebest\Webtrees\Auth;
 use Fisharebest\Webtrees\FlashMessages;
 use Fisharebest\Webtrees\Registry;
@@ -26,23 +25,31 @@ use Fisharebest\Webtrees\Menu;
 use Fisharebest\Webtrees\View;
 use Fisharebest\Webtrees\Tree;
 use Fisharebest\Webtrees\Validator;
-//use Fisharebest\Webtrees\Webtrees;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\StreamFactoryInterface;
+use Psr\Http\Message\UploadedFileInterface;
 use League\Flysystem\FilesystemException;
+use JsonException;
+use RuntimeException;
+use UnexpectedValueException;
 
 /**
- * Main class for FamilyBookExport module
+ * The module: menu "Family book", its pages and forms
  */
 class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, ModuleMenuInterface
 {
-
     use ModuleCustomTrait;
     use ModuleMenuTrait;
     use ExportFamilyBookBranches;
     use ExportFamilyBookProfiles;
+
+    // Metadata shown in Control panel > Modules (see customModule...). The version of a release is set
+    // here and in latest-version.txt; "-dev" marks a state between releases.
+    private const CUSTOM_VERSION = '3.0.0-dev';
+    private const AUTHOR_NAME = 'ThorstenOest';
+    private const GITHUB_REPOSITORY = 'ThorstenOest/ExportFamilyBook';
 
     // Access level if Control panel > Modules > Menus has no entry for this module and tree: managers only.
     // webtrees 2.2 has no defaultAccessLevel(); AbstractModule::accessLevel() falls back to this property.
@@ -209,7 +216,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         };
     }
 
-
     public function boot(): void
     {
         // Register a namespace for our views.
@@ -223,12 +229,35 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
     public function title(): string
     {
-        return I18N::translate('Export Family Book (Latex / GraphML)');
+        return I18N::translate('Family book (LaTeX / GraphML)');
     }
 
     public function description(): string
     {
-        return I18N::translate('This is a module to export a tree in Latex (as family book) or GraphML (as chart) format.');
+        return I18N::translate('Exports a tree as family book (LaTeX) or as family tree chart (GraphML for yEd).');
+    }
+
+    public function customModuleAuthorName(): string
+    {
+        return self::AUTHOR_NAME;
+    }
+
+    public function customModuleVersion(): string
+    {
+        return self::CUSTOM_VERSION;
+    }
+
+    /**
+     * Text file with the latest version, read by the control panel (Modules > All modules)
+     */
+    public function customModuleLatestVersionUrl(): string
+    {
+        return 'https://raw.githubusercontent.com/' . self::GITHUB_REPOSITORY . '/main/latest-version.txt';
+    }
+
+    public function customModuleSupportUrl(): string
+    {
+        return 'https://github.com/' . self::GITHUB_REPOSITORY;
     }
 
     /**
@@ -242,6 +271,8 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         if (str_starts_with($language, 'de')) {
             return [
                 'Family book' => 'Familienbuch',
+                'Family book (LaTeX / GraphML)' => 'Familienbuch (LaTeX / GraphML)',
+                'Exports a tree as family book (LaTeX) or as family tree chart (GraphML for yEd).' => 'Exportiert einen Stammbaum als Familienbuch (LaTeX) oder als Stammbaum-Grafik (GraphML für yEd).',
                 'Shape' => 'Form',
                 'Export running … The download starts when the file is ready. This can take a few minutes.' => 'Export läuft … Der Download beginnt, sobald die Datei fertig ist. Das kann einige Minuten dauern.',
                 'Book (LaTeX)' => 'Buch (LaTeX)',
@@ -571,7 +602,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         $review = (int) $user->getPreference(self::PREF_MEDIA_REVIEW . $tree->id(), '0');
         $profile = $this->profileBarData($request, $tree, 'media');
 
-        $selection = $this->mediaSelection($tree, $individual, $profile['active']);
+        $selection = $this->mediaSelection($request, $tree, $individual, $profile['active']);
 
         return $this->viewResponse($this->name() . '::media', array_merge(
             $this->mediaPageData($tree, $selection, $review),
@@ -620,7 +651,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             $user->setPreference(self::PREF_MEDIA_REVIEW . $tree->id(), (string) time());
             FlashMessages::addMessage(e(I18N::translate('The images have been marked as reviewed.')), 'success');
         } elseif ($mod_action === 'save_media') {
-            $selection = $this->mediaSelection($tree, $individual, $profile);
+            $selection = $this->mediaSelection($request, $tree, $individual, $profile);
             if ($selection['error']) {
                 // nothing is saved, the message is already set
                 return redirect($url);
@@ -673,6 +704,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
      * Uses the selection of the LaTeX export (individuals of the branches, media loops of the templates,
      * privacy), see ExportFamilyBookData::collectLatexMedia().
      *
+     * @param ServerRequestInterface $request
      * @param Tree $tree
      * @param Individual|null $individual reference individual
      * @param string $profile ID of the profile ('' = Standard)
@@ -680,13 +712,13 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
      *         error: true if a template or the branch list has an error (message set, no images)
      *         include/exclude: media IDs (upper case) of the lists include_media/exclude_media
      */
-    private function mediaSelection(Tree $tree, ?Individual $individual, string $profile): array
+    private function mediaSelection(ServerRequestInterface $request, Tree $tree, ?Individual $individual, string $profile): array
     {
         $settings = $this->readProfileSettings('latex', $tree, $profile);
         $settings['refid'] = $individual?->xref() ?? '';
 
         try {
-            $collected = (new ExportFamilyBookData())->collectLatexMedia($tree, $settings);
+            $collected = $this->exportData($request, $tree, 'latex', $settings)->collectLatexMedia();
             $error = false;
         } catch (ExportFamilyBookTemplateException $ex) {
             // error in a template or in the branch list: the page shows the message and no images
@@ -863,18 +895,14 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         $this->checkAccess($request, $tree);
         $this->rememberReferenceIndividual($request, $tree);
 
-        $parsedBodys = $request->getParsedBody();
+        $parsedBodys = $this->formData($request);
 
-        // set settings to null as default value 
+        // set settings to null as default value
         $settings = null;
 
-        // mod_action value is set by the definition od the submit button
-        if (array_key_exists('mod_action', $parsedBodys)) {
-            $mod_action = $parsedBodys['mod_action'];
-        } else {
-            $mod_action = "";
-        };
+        // mod_action value is set by the definition of the submit button;
         // each page handles only the actions of its own export type
+        $mod_action = $parsedBodys['mod_action'] ?? '';
         if (!is_string($mod_action) || !str_ends_with($mod_action, '_' . $page_type)) {
             $mod_action = "";
         }
@@ -889,12 +917,11 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                     throw new RuntimeException('Failed to create temporary stream');
                 }
 
-                //stream_filter_append($stream, GedcomEncodingFilter::class, STREAM_FILTER_WRITE, ['src_encoding' => UTF8::NAME, 'dst_encoding' => $encoding]);
                 // end of copy from GedcomExportService::export
 
-                $exportData = new ExportFamilyBookData();
+                $export_type = ($mod_action == 'export_latex') ? 'latex' : 'graphml';
                 try {
-                    $resource = $exportData->export($request, $stream);
+                    $resource = $this->exportData($request, $tree, $export_type, $parsedBodys)->export($export_type, $stream);
                 } catch (ExportFamilyBookTemplateException $ex) {
                     // error in a template or in the branch list: show the form again with the
                     // submitted values and the message instead of the download
@@ -937,53 +964,25 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 $export_type = ($mod_action == 'download_settings_graphml') ? 'graphml' : 'latex';
                 $download_filename = "export_{$export_type}_settings.json";
 
-                $stream   = $this->stream_factory->createStream($this->encodeSettings($export_type, $_POST));
+                $stream   = $this->stream_factory->createStream($this->encodeSettings($export_type, $parsedBodys));
                 $response = $this->response_factory->createResponse()
                     ->withBody($stream)
                     ->withHeader('content-type', 'application/json; charset=UTF-8')
                     ->withHeader('content-disposition', 'attachment; filename="' . $download_filename . '"');
-                /*
-                header('Content-Type: text/plain; charset=UTF-8');
-                header('Content-Disposition: attachment; filename="' . $download_filename . '"');
-
-                // Create a buffer to store the file content
-                ob_start();
-
-                // Write Byte Order Mark
-                echo pack("CCC", 0xef, 0xbb, 0xbf);
-
-                // Write parameter (base64 encoded serialized POST data)
-                $serialized_post = serialize($_POST);
-                $encoded_post = base64_encode($serialized_post);
-                echo $encoded_post;
-
-                // Get the content from the buffer and clean up
-                $file_content = ob_get_clean();
-
-                // Set the content length header
-                header('Content-Length: ' . strlen($file_content));
-
-                // Output the file content
-                echo $file_content;
-*/
                 break;
             case "upload_settings_graphml":
             case "upload_settings_latex":
                 // set the setting variable based on the uploaded file
-                // upload the formula data into a local file
-                // get temporary file name of the uploaded file on the server
-                if ($_FILES['uploadedfile']['error'] === UPLOAD_ERR_OK) {
-                    $uploaded_file = $_FILES['uploadedfile']['tmp_name'];
-
+                $uploaded_file = $request->getUploadedFiles()['uploadedfile'] ?? null;
+                if ($uploaded_file instanceof UploadedFileInterface && $uploaded_file->getError() === UPLOAD_ERR_OK) {
                     // Read the content of the uploaded file (JSON or the old base64/serialize format)
                     $export_type = ($mod_action == 'upload_settings_graphml') ? 'graphml' : 'latex';
                     try {
-                        $settings = $this->decodeSettings($export_type, (string) file_get_contents($uploaded_file));
+                        $settings = $this->decodeSettings($export_type, (string) $uploaded_file->getStream());
                     } catch (UnexpectedValueException $ex) {
                         FlashMessages::addMessage(e(I18N::translate('The settings file could not be read: %s', $ex->getMessage())), 'danger');
                     }
                 }
-                // exit;
                 $response = $this->showPage($request, $page_type, $settings);
                 break;
             case "save_tree_settings_graphml":
@@ -1024,7 +1023,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             e(I18N::translate('Export running … The download starts when the file is ready. This can take a few minutes.')) .
             '</span></td></tr>';
     }
-
 
     /**
      * Get the help text
@@ -1280,7 +1278,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         return $help_text;
     }
 
-
     /**
      * Wrap a help text into a JavaScript string literal for document.write()
      *
@@ -1294,7 +1291,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
     {
         return json_encode('<html>' . $help_text . '</html>', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
     }
-
 
     /**
      * Names of the setting fields in the form of an export type
@@ -1312,7 +1308,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             self::SETTINGS_FIELDS[$export_type]
         );
     }
-
 
     /**
      * Encode the settings of the form as JSON
@@ -1335,7 +1330,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
         ) . "\n";
     }
-
 
     /**
      * Decode a settings file
@@ -1392,7 +1386,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         return $result;
     }
 
-
     /**
      * Read the default settings shown when the form is opened
      *
@@ -1412,7 +1405,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         return $settings;
     }
-
 
     /**
      * Read the default settings from the module folder
@@ -1442,7 +1434,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         return array();
     }
 
-
     /**
      * The setting fields of a submitted form (only text values of the whitelist)
      *
@@ -1462,6 +1453,63 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         return $settings;
     }
 
+    /**
+     * The submitted form data of a request (empty if the request has no form data)
+     *
+     * @param ServerRequestInterface $request
+     * @return array<string,mixed>
+     */
+    public function formData(ServerRequestInterface $request): array
+    {
+        $body = $request->getParsedBody();
+
+        return is_array($body) ? $body : array();
+    }
+
+    /**
+     * The settings of an export: the setting fields of the export type, completed with default values
+     *
+     * This is the only place where the settings for the export are put together. Only text values of
+     * the setting fields are used (see settingsFromForm). GraphML: missing fields of the family nodes
+     * get the values of older settings (see ExportFamilyBookData::familyNodeSettings). Every other
+     * missing setting field is empty. The form always sends all fields of its export type, so the
+     * default values matter only for incomplete data (e.g. settings of a profile).
+     *
+     * @param string $export_type 'latex' or 'graphml'
+     * @param array $values form data or saved settings
+     * @return array<string,string>
+     */
+    public function exportSettings(string $export_type, array $values): array
+    {
+        $settings = $this->settingsFromForm($export_type, $values);
+        if ($export_type === 'graphml') {
+            $settings = ExportFamilyBookData::familyNodeSettings($settings);
+        }
+
+        return $settings + array_fill_keys($this->settingsFields($export_type), '');
+    }
+
+    /**
+     * The export with the settings of a form (or of saved settings) for a request
+     *
+     * @param ServerRequestInterface $request
+     * @param Tree $tree
+     * @param string $export_type 'latex' or 'graphml'
+     * @param array $values form data or saved settings, see exportSettings
+     * @return ExportFamilyBookData
+     */
+    private function exportData(ServerRequestInterface $request, Tree $tree, string $export_type, array $values): ExportFamilyBookData
+    {
+        // xref of the address of the page: the start of the default branch if no reference individual is set
+        $url_xref = $request->getQueryParams()['xref'] ?? '';
+
+        return new ExportFamilyBookData(
+            $tree,
+            $this->exportSettings($export_type, $values),
+            is_string($url_xref) ? $url_xref : '',
+            $request->getServerParams()
+        );
+    }
 
     /**
      * Name of the folder of a tree: the tree name if it is safe, otherwise a safe name with a hash
@@ -1481,7 +1529,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         return $safe;
     }
 
-
     /**
      * Folder with the default settings of a tree, relative to the webtrees data folder
      *
@@ -1494,7 +1541,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         return self::TREE_SETTINGS_FOLDER . '/' . $this->treeFolderName($tree->name()) . '/' .
             ($export_type === 'graphml' ? 'graphml' : 'latex');
     }
-
 
     /**
      * Value of a text file: line endings as sent by a form (CRLF), without a final line break
@@ -1515,7 +1561,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         return str_replace("\n", "\r\n", $content);
     }
 
-
     /**
      * Content of a text file for a value: LF line endings and a final line break
      *
@@ -1526,7 +1571,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
     {
         return str_replace(array("\r\n", "\r"), "\n", $value) . "\n";
     }
-
 
     /**
      * Value of a list file: the IDs separated by commas
@@ -1554,7 +1598,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         return implode(',', $items);
     }
 
-
     /**
      * Content of a list file for a value: one ID per line
      *
@@ -1567,7 +1610,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         return ($value === '') ? '' : str_replace(',', "\n", $value) . "\n";
     }
-
 
     /**
      * Read the default settings of a tree from its folder in the data folder
@@ -1613,7 +1655,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         return $settings;
     }
-
 
     /**
      * Write the settings of the form as default settings of a tree
@@ -1680,7 +1721,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         }
     }
 
-
     /**
      * Save the image selection: update exclude_media.txt in the folder of the profile
      *
@@ -1717,7 +1757,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         return true;
     }
-
 
     /**
      * Change a list file of media IDs (format see decodeListFile)
@@ -1784,7 +1823,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         return ($result === array()) ? '' : implode($eol, $result) . $eol;
     }
 
-
     /**
      * Text of README.txt in the folder of a tree
      *
@@ -1849,7 +1887,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
         return implode("\n", $lines) . "\n";
     }
-
 
     /**
      * Table "Box style" of the GraphML form: a column per kind of box, a row per property
@@ -2050,7 +2087,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             }
         }
 
-
         /*
 		 * seeds for branches
 		 */
@@ -2105,13 +2141,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 echo 'selected';
             echo '>' . $o . '</option>';
         };
-        /**
-         * '<option value="Times New Roman" selected>Times New Roman</option>' .
-         * '<option value="Dialog">Dialog</option>' .
-         * '<option value="Franklin Gothic Book">Franklin Gothic Book</option>' .
-         * '<option value="Bookman Old Style">Bookman Old Style</option>' .
-         * '<option value="Lucida Handwriting">Lucida Handwriting</option>' .
-         */
         echo '</select></td></tr>';
 
         /*
@@ -2155,44 +2184,24 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             e(array_key_exists($name, $settings) ? $settings[$name] : "#ffffff") .
             '" name="' . $name . '"></td></tr>';
 
-
         // Submit button
-        //echo '<tr><td class="topbottombar" colspan="6">', 
-        //'<button name="mod_action" value="export_graphml">', I18N::translate ( 
-        //		'Export Family Tree' ), '</button>', '</td></tr>';
-        // echo '</form>';
-        // new for post method
         echo $this->exportButtonRow('graphml', 6);
 
         // download settings
-        // echo '<form name="download" method="get" action="module.php">
-        // <input type="hidden" name="mod" value=', $this->getName (), '>';
-        // <input type="hidden" name="mod_action" value="export">
         echo '<tr><td class="topbottombar" colspan="6">', '<button name="mod_action" value="download_settings_graphml">', I18N::translate(
             'Download Settings'
         ), '</button></td></tr>';
         echo $this->saveProfileRow($tree, 'graphml', 6);
         echo '</table></form>';
-        // echo '</table></form>';
-
-        // echo '</div>';
 
         // upload settings
-        // echo '<div id="reportengine-page">';
         echo '<table class="facts_table width50">';
         echo '<tr><td class="descriptionbox width30 wrap" colspan="5">', I18N::translate(
             'Upload/Download Settings'
         ), '</td></tr>';
         // header line of the form
-        //echo '<form name="upload" enctype="multipart/form-data" method="POST" 
-        //		action="module.php?mod=' . $this->getName () .
-        //		 '&mod_action=upload_settings_graphml">';
         echo '<form action=\'' . e($this->pageUrl($tree, 'graphml', $individual?->xref() ?? '')) . '\' name="upload" enctype="multipart/form-data" method="post">',
         csrf_field();
-
-        //echo '<form name="upload" enctype="multipart/form-data" method="POST" 
-        //         action="$module->chartUrl($individual, array("mod_action" = "upload_settings_graphml"))">';
-        // <input type="hidden" name="mod" value=', $this->getName (), '>';
 
         echo '<tr><td class="descriptionbox width30 wrap">', I18N::translate(
             'Read'
@@ -2201,18 +2210,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         ), '</button></td></tr>';
         echo '</table></form>';
 
-        /**
-         * // download settings
-         * echo '<form name="download" method="get" action="module.php">
-         * <input type="hidden" name="mod" value=', $this->getName (), '>';
-         * // <input type="hidden" name="mod_action" value="export">
-         * echo '<tr><td class="descriptionbox width30 wrap">', I18N::translate (
-         * 'Write' ),
-         * '<td class="optionbox" colspan="4">',
-         * '<button name="mod_action" value="download_settings">', I18N::translate (
-         * 'Download Settings' ), '</button></td></tr>';
-         * echo '</table></form>';
-         */
         echo '</div>';
     }
 
@@ -2251,11 +2248,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             "Reference Individual"
         ), '</td>';
         echo '<td class="optionbox" colspan="6">';
-        //echo '<label for="pid">' . I18N::translate('Enter an individual ID') . '</label>';
-        //echo '<input class="pedigree_form" data-autocomplete-type="IFSRO" type="text" name="refid" id="pid" size="5" value="">';
 
-
-        //echo ' ' . FunctionsPrint::printFindIndividualLink('pid');
         echo view('components/select-individual', ['name' => "refid", 'id' => 'pid', 'tree' => $tree, 'individual' => $individual]);
         echo '</td>';
 
@@ -2491,38 +2484,17 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 '" name="' . $name . '"></td></tr>';
         }
 
-
-        //echo '<td class="optionbox" colspan="1"/></tr>';
-
-
-
         // Submit button to export the family tree
 
-        //echo '<tr><td class="topbottombar" colspan="7">', 
-        //'<button name="mod_action" value="export_latex">', I18N::translate ( 
-        //		'Export Family Tree' ), '</button>', '</td></tr>';
-        // new for post method
         echo $this->exportButtonRow('latex', 7);
-        /* '<form action=\'$module->chartUrl($individual, [\"mod_action\" => \"export_latex\"])\' method=\"post\">',
-              '<?= csrf_field() ?>',
-              '<input type="submit" value="', I18N::translate (
-			 	'Export Family Tree' ), '"></form>','</td></tr>';
-        */
         // Button to download settings
-        //echo '<form name="download" method="get" action="module.php">,
-        //        <input type="submit" value="download">';
-        // <input type="hidden" name="mod_action" value="export">
         echo '<tr><td class="topbottombar" colspan="7">', '<button name="mod_action" value="download_settings_latex">', I18N::translate(
             'Download Settings'
         ), '</button></td></tr>';
         echo $this->saveProfileRow($tree, 'latex', 7);
         echo '</table></form>';
-        // echo '</table></form>';
-
-        // echo '</div>';
 
         // upload settings
-        // echo '<div id="reportengine-page">';
         echo '<table class="facts_table width50">';
         echo '<tr><td class="descriptionbox width30 wrap" colspan="7">', I18N::translate(
             'Upload/Download Settings'
@@ -2530,11 +2502,6 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         // header line of the form
         echo '<form action=\'' . e($this->pageUrl($tree, 'latex', $individual?->xref() ?? '')) . '\' name="upload" enctype="multipart/form-data" method="post">',
         csrf_field();
-
-        //echo '<form name="upload" enctype="multipart/form-data" method="POST" 
-        //        action="$module->chartUrl($individual)">';
-        //echo 'csrf_field()';
-        // <input type="hidden" name="mod" value=', $this->getName (), '>';
 
         echo '<tr><td class="descriptionbox width30 wrap">', I18N::translate(
             'Read'

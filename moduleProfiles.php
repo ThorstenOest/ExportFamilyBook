@@ -14,6 +14,8 @@
  *   ExportFamilyBook/<tree>/profiles/<id>/branches.json which branches are exported (book and chart)
  */
 
+namespace haduloha\ExportFamilyBook;
+
 use Fisharebest\Webtrees\Auth;
 use Fisharebest\Webtrees\FlashMessages;
 use Fisharebest\Webtrees\I18N;
@@ -25,6 +27,9 @@ use Fisharebest\Webtrees\Validator;
 use League\Flysystem\FilesystemException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use InvalidArgumentException;
+use JsonException;
+use Transliterator;
 
 trait ExportFamilyBookProfiles
 {
