@@ -22,12 +22,12 @@
 <h2>Welches Feld wofür</h2>
 <table>
 <tr><th>Feld</th><th>Inhalt</th></tr>
-<tr><td>Buch: Preamble, Title, Epilog</td><td>LaTeX, wird unverändert übernommen: Anfang der Datei, Titelseite, Ende (Literaturverzeichnis, Index, <code>\end{document}</code>)</td></tr>
-<tr><td>Buch: Section summary label</td><td>Template, wird am Anfang eines Zweigs auf jede Person angewendet (z. B. eine Liste der Personen, die zwei Zweige verbinden); darf leer bleiben</td></tr>
-<tr><td>Buch: Node label</td><td>Template für den Eintrag einer Person; Familien stehen darin mit <code>@ForeachFAMS@</code></td></tr>
-<tr><td>Buch: Symbols</td><td>Symbole für Faktenarten (<code>@FeFactType@</code>) und die Legende <code>\GedcomLegende</code></td></tr>
-<tr><td>Buch: Default formats, Hierarchy levels</td><td>Datums- und Ortsformat für Platzhalter ohne Formatangabe; LaTeX-Befehle für die Überschriften der Zweige und Generationen</td></tr>
-<tr><td>Grafik: Node label, Node description</td><td>Templates für das Kästchen einer Person bzw. einen Familienknoten (Label: HTML, wenn es mit <code>&lt;html&gt;</code> beginnt)</td></tr>
+<tr><td>Buch: Präambel, Titel des Dokuments, Epilog</td><td>LaTeX, wird unverändert übernommen: Anfang der Datei, Titelseite, Ende (Literaturverzeichnis, Index, <code>\end{document}</code>)</td></tr>
+<tr><td>Buch: Zusammenfassung am Anfang eines Zweigs</td><td>Template, wird am Anfang eines Zweigs auf jede Person angewendet (z. B. eine Liste der Personen, die zwei Zweige verbinden); darf leer bleiben</td></tr>
+<tr><td>Buch: Eintrag einer Person</td><td>Template für den Eintrag einer Person; Familien stehen darin mit <code>@ForeachFAMS@</code></td></tr>
+<tr><td>Buch: Symbole für Fakten</td><td>Symbole für Faktenarten (<code>@FeFactType@</code>) und die Legende <code>\GedcomLegende</code></td></tr>
+<tr><td>Buch: Standardformate, Überschriften</td><td>Datums- und Ortsformat für Platzhalter ohne Formatangabe; LaTeX-Befehle für die Überschriften der Zweige und Generationen</td></tr>
+<tr><td>Grafik: Text des Kästchens, Beschreibung des Kästchens</td><td>Templates für das Kästchen einer Person bzw. einen Familienknoten (Label: HTML, wenn es mit <code>&lt;html&gt;</code> beginnt)</td></tr>
 </table>
 <p>Die Datei des Buchs: Präambel, Legende, Quellenliste, Titel, dann je Zweig die Überschriften, die Zusammenfassung und die Einträge, zum Schluss der Epilog.</p>
 
@@ -67,11 +67,11 @@ und <code>\textbf{Klein, Maria} \\</code> für eine Person ohne Daten.</p>
 <tr><td><code>@FactOCCU@</code> (jedes Tag)</td><td>Wert der Fakten mit diesem Tag</td><td>Positionen in der Liste nach Datum: <code>@FactOCCU&amp;-1@</code> → der letzte Beruf; ohne Formatangabe werden die Werte aneinandergeklebt</td></tr>
 <tr><td><code>@Id@</code></td><td>Nummer der Person</td><td><code>gen_no</code> (Standard), <code>no</code> oder <code>xref</code>: <code>\label{@Id&amp;xref@}</code></td></tr>
 <tr><td><code>@FatherGivenName@</code>, <code>@FatherSurName@</code>, <code>@FatherId@</code>, <code>@MotherGivenName@</code>, <code>@MotherSurName@</code>, <code>@MotherId@</code></td><td>Vater, Mutter (in <code>@ForeachFAMC@</code> die dieser Familie)</td><td>wie <code>@GivenName@</code> bzw. <code>@Id@</code></td></tr>
-<tr><td><code>@Reference@</code></td><td>Verwandtschaft zur Bezugsperson, mit den Bezugssymbolen</td><td>–</td></tr>
+<tr><td><code>@Reference@</code></td><td>Verwandtschaft zur Bezugsperson, mit den Symbolen für die Verwandtschaft</td><td>–</td></tr>
 <tr><td><code>@Ancestor@</code></td><td>Symbol für direkte Vorfahren und Nachkommen, Symbol für andere Blutsverwandte</td><td><code>@Ancestor&amp;*&amp;**@</code></td></tr>
 <tr><td><code>@Link@</code></td><td>Name des anderen Zweigs einer Person, die zwei Zweige verbindet</td><td>–</td></tr>
 <tr><td><code>@LinkId@</code></td><td>nur Buch: Sprungmarke des Eintrags im anderen Zweig</td><td>wie <code>@Id@</code>: <code>\pageref{@LinkId&amp;xref@}</code></td></tr>
-<tr><td><code>@Portrait@</code></td><td>Dateiname des Portraits</td><td><code>fallback</code> oder <code>silhouette</code> (Standardportrait der Grafik)</td></tr>
+<tr><td><code>@Portrait@</code></td><td>Dateiname des Portraits</td><td><code>fallback</code> oder <code>silhouette</code> (Standard-Portrait der Grafik)</td></tr>
 <tr><td><code>@PortraitSize@</code></td><td>andere Seite des Portraits in Pixeln</td><td><code>@PortraitSize&amp;w30&amp;20@</code>: Höhe zur Breite 30, 20 ohne Portrait</td></tr>
 <tr><td><code>@PortraitIcon@</code></td><td>nur Grafik: Portrait als Bild im Kästchen</td><td><code>@PortraitIcon&amp;Breite&amp;top|left&amp;jpg|png&amp;Schärfe@</code>, z. B. <code>@PortraitIcon&amp;30&amp;left@</code></td></tr>
 <tr><td><code>@Gedcom@</code></td><td>GEDCOM des Datensatzes</td><td>–</td></tr>
@@ -107,7 +107,7 @@ und <code>\textbf{Klein, Maria} \\</code> für eine Person ohne Daten.</p>
 <tr><td><code>@ForeachMedia&amp;Arten&amp;Endungen&amp;unique@</code></td><td>jede Mediendatei, z. B. <code>@ForeachMedia&amp;photo&amp;jpg,png&amp;unique@</code></td><td><code>@FeMediaFile@</code> (<code>&amp;NoExtension</code>), <code>@FeMediaId@</code>, <code>@FeMediaCaption@</code></td></tr>
 <tr><td><code>@ForeachReference@</code></td><td>jede Quelle</td><td><code>@FeReferenceName@</code>: Nummer für <code>\cite{}</code></td></tr>
 </table>
-<p><code>@FeFactType@</code> und <code>@FeAttributeType@</code>: das Symbol aus dem Feld Symbols oder der Name des Tags;
+<p><code>@FeFactType@</code> und <code>@FeAttributeType@</code>: das Symbol aus dem Feld „Symbole“ oder der Name des Tags;
 Formatangaben <code>IfExists&amp;Präfix&amp;Suffix</code> (Präfix und Suffix nur um einen Namen). Sie zählen nie als Daten.</p>
 
 <h2>Häufige Fehler</h2>

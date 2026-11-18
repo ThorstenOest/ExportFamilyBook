@@ -148,7 +148,7 @@ $counter = static function (string $text, array $spans): string {
                             <div class="form-check">
                                 <?php if ($item['state'] === 'include') : ?>
                                     <input type="checkbox" class="form-check-input" checked disabled id="efb-c<?= (int) $book_index ?>-<?= e($item['xref']) ?>">
-                                    <label class="form-check-label" for="efb-c<?= (int) $book_index ?>-<?= e($item['xref']) ?>" title="<?= e(I18N::translate('Always in the book (list “Include” of the settings)')) ?>"><?= e(I18N::translate('Always in the book (list “Include” of the settings)')) ?></label>
+                                    <label class="form-check-label" for="efb-c<?= (int) $book_index ?>-<?= e($item['xref']) ?>" title="<?= e(I18N::translate('Always in the book (list “Always include” of the settings)')) ?>"><?= e(I18N::translate('Always in the book (list “Always include” of the settings)')) ?></label>
                                 <?php else : ?>
                                     <input type="checkbox" class="form-check-input efb-check" data-xref="<?= e($item['xref']) ?>" id="efb-c<?= (int) $book_index ?>-<?= e($item['xref']) ?>" <?= $item['state'] === 'exclude' ? '' : 'checked' ?> <?= $can_save ? '' : 'disabled' ?>>
                                     <label class="form-check-label" for="efb-c<?= (int) $book_index ?>-<?= e($item['xref']) ?>"><?= e(I18N::translate('In the book')) ?></label>

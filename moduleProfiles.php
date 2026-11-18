@@ -979,7 +979,7 @@ trait ExportFamilyBookProfiles
      */
     private function profileFieldLabel(string $export_type, string $field): string
     {
-        $prefix = $export_type === 'graphml' ? I18N::translate('Chart') . ': ' : '';
+        $prefix = $export_type === 'graphml' ? I18N::translate('Family tree chart (GraphML)') . ': ' : '';
 
         return $prefix . match ($field) {
             'title' => I18N::translate('Title'),
@@ -987,7 +987,14 @@ trait ExportFamilyBookProfiles
             'preamble' => I18N::translate('Preamble'),
             'epilog' => I18N::translate('Epilog'),
             'symbols' => I18N::translate('Symbols'),
-            'branch_seeds' => I18N::translate('Seeds'),
+            'branch_seeds' => I18N::translate('List of branches'),
+            'individuals_summary_label_template' => I18N::translate('Summary at the beginning of a branch'),
+            'individuals_label_template' => $export_type === 'graphml'
+                ? I18N::translate('Template for individuals') . ' – ' . I18N::translate('Node label')
+                : I18N::translate('Entry of an individual'),
+            'individuals_description_template' => I18N::translate('Template for individuals') . ' – ' . I18N::translate('Node description'),
+            'families_label_template' => I18N::translate('Template for families') . ' – ' . I18N::translate('Node label'),
+            'families_description_template' => I18N::translate('Template for families') . ' – ' . I18N::translate('Node description'),
             default => $field,
         };
     }

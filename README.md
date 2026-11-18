@@ -42,11 +42,11 @@ It has one entry per page, in this order (a line separates the two export pages 
 
 - All four pages show the **book profile** bar at the top (see below): the active profile, a list to switch
   profiles and (for managers) "Manage profiles".
-- The two export pages have their own form with "Export Family Tree", "Download Settings", "Upload Settings"
+- The two export pages have their own form with "Export family tree", "Download settings", "Upload settings"
   and (for managers) "Save profile “…”" and "Save as new profile", and a link to the other export page.
   On the export pages, managers find "Save profile “…”" also in the profile bar; it saves the export form
   below, like the button at the end of the form.
-- After "Export Family Tree" the page shows "Export running …" with a spinner next to the button until the
+- After "Export family tree" the page shows "Export running …" with a spinner next to the button until the
   download starts (an export can take some minutes); the button cannot be pressed again meanwhile.
 - **Reference individual**: chosen in the form with the individual search field. A profile other than
   Standard has its own reference individual. Otherwise it is preselected with the individual of the page you
@@ -93,7 +93,7 @@ Functions:
   profile made from Standard gets its own title, image selection, branch selection and reference individual.
 - **Manage profiles** (managers): copy the active profile under a new name (the saved state), rename it,
   delete it (with a question). Standard cannot be renamed or deleted.
-- "Download Settings" and "Upload Settings" work as before: they save resp. fill the form, whatever profile
+- "Download settings" and "Upload settings" work as before: they save resp. fill the form, whatever profile
   is active.
 
 Files (see also below): each profile is a folder in the data folder of the tree.
@@ -188,7 +188,7 @@ in a grid with preview images, title, file name and individual:
 
 ## Branches
 
-The setting **Seeds** (`branch_seeds`) divides the book and the chart into branches. The page
+The setting **List of branches** (`branch_seeds`) divides the book and the chart into branches. The page
 **Branch selection** ("Zweige") shows this list as a table with one row per branch, so you do not have to
 edit the text field of the export pages (it stays available there). It shows the state of the active profile:
 
@@ -247,7 +247,7 @@ How the export forms the branches (good to know when choosing stop individuals):
 
 ## Settings files
 
-"Download Settings" saves the settings of the form as a readable JSON file
+"Download settings" saves the settings of the form as a readable JSON file
 (`export_latex_settings.json` or `export_graphml_settings.json`):
 
 ```json
@@ -260,7 +260,7 @@ How the export forms the branches (good to know when choosing stop individuals):
 ```
 
 Only the setting fields of the form are saved, no control fields like `_csrf`.
-"Upload Settings" reads JSON files and files in the old format (`*.txt`, base64 encoded).
+"Upload settings" reads JSON files and files in the old format (`*.txt`, base64 encoded).
 
 ## Default settings of a tree (files in the data folder)
 
@@ -270,7 +270,7 @@ for example:
 
 ```
 data/ExportFamilyBook/<tree>/latex/
-    settings.json                            short options (format as "Download Settings")
+    settings.json                            short options (format as "Download settings")
     preamble.tex                             long fields: the text exactly as in the form,
     title.tex                                no escaping, one file per field
     individuals_summary_label_template.tex
@@ -310,7 +310,7 @@ When the page is opened (`<type>` is `latex` or `graphml`), the first existing s
 1. The folder of the active profile (only for a profile other than Standard), field by field.
 2. The folder of the tree in the data folder (see above), field by field (the profile Standard).
 3. `export_<type>_settings.local.json` in the module folder: your own settings (save them with
-   "Download Settings" and rename the file). This file is not part of the repository and survives updates.
+   "Download settings" and rename the file). This file is not part of the repository and survives updates.
 4. `export_<type>_settings.txt` in the module folder: old format, your own settings from an earlier version.
 5. `export_<type>_settings.json` in the module folder: general example of the repository.
 
@@ -321,7 +321,7 @@ Sources 3 to 5 are alternatives: only the first existing file of them is used.
 The text of the book and of the boxes of the chart is made from templates with placeholders like
 `@SurName@` or `@BirthDate&%Y@`. The template language (all placeholders, formats, loops and blocks, with
 examples, recipes and the common errors) is described in **[docs/templates.md](docs/templates.md)**.
-The button "Open Help Window" on the export pages and the icon "?" next to "Template for ..." show a short
+The button "Open help" on the export pages and the icon "?" next to "Template for ..." show a short
 version in the module (in German if webtrees runs in German).
 
 Topics that used to be notes in this README are now in the reference:
@@ -416,7 +416,7 @@ Templates that keep `@Portrait@` with a path work as before.
 
 ### Family nodes in the family tree chart
 
-Each family is a node between the parents and the children. The table "Box style" of the form has a column
+Each family is a node between the parents and the children. The table "Box style" of the form ("Aussehen der Kästchen" in German) has a column
 for each kind of box (male, female, unknown sex and the two kinds of family nodes) and a row for the shape,
 fill colour, border colour, size, border width, font size and default portrait. The two columns of the family
 nodes are:
