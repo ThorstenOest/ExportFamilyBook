@@ -19,7 +19,6 @@ use Fisharebest\Webtrees\Gedcom;
 use Fisharebest\Webtrees\Media;
 use Fisharebest\Webtrees\Tree;
 use Fisharebest\Webtrees\Elements\UnknownElement;
-use Psr\Http\Message\ServerRequestInterface;
 
 /**
  * Error in a template or in the branch list that the user can correct in the form
@@ -78,6 +77,30 @@ class ExportFamilyBookData extends AbstractModule
     // icon of the node processed: [id, width, height, position] or null
     private ?array $node_icon = null;
 
+    // Settings of the export: the setting fields of the form of the export type, completed with
+    // default values (see ExportFamilyBook::exportSettings). The export reads no request data itself.
+    private array $settings;
+    // xref of the address of the page: the individual of the default branch if the settings have no
+    // reference individual (see getSeeds)
+    private string $url_xref;
+    // server parameters of the request (ServerRequestInterface::getServerParams), used for the
+    // path of the portrait files (see getPortrait)
+    private array $server_params;
+
+    /**
+     * @param Tree $tree
+     * @param array<string,string> $settings settings of the export (see ExportFamilyBook::exportSettings)
+     * @param string $url_xref xref of the address of the page ('' if none)
+     * @param array<string,mixed> $server_params server parameters of the request
+     */
+    public function __construct(Tree $tree, array $settings, string $url_xref = '', array $server_params = array())
+    {
+        $this->tree = $tree;
+        $this->settings = $settings;
+        $this->url_xref = $url_xref;
+        $this->server_params = $server_params;
+    }
+
     /**
      * Collect the media that the LaTeX export would include, without creating the book
      *
@@ -88,21 +111,15 @@ class ExportFamilyBookData extends AbstractModule
      * are collected for each individual, so excluded media and all occurrences are listed.
      * Media the current user may not see are skipped, as in the export.
      *
-     * @param Tree $tree
-     * @param array<string,string> $parameter settings of the LaTeX form incl. refid
      * @return array{persons: array<string,array<string,true>>, media: array<string,array{media: Media, files: array<string,\Fisharebest\Webtrees\MediaFile>}>}
      *         persons: individual xref => media xrefs, both in the order of the book;
      *         media: media xref => media object and the files used (file name => file)
      */
-    public function collectLatexMedia(Tree $tree, array $parameter): array
+    public function collectLatexMedia(): array
     {
-        $parameter['include_media'] = '';
-        $parameter['exclude_media'] = '';
-
-        // the export reads the settings from $_POST
-        $post = $_POST;
-        $_POST = $parameter;
-        $this->tree = $tree;
+        $settings = $this->settings;
+        $this->settings['include_media'] = '';
+        $this->settings['exclude_media'] = '';
         $this->media_collector = array('persons' => array(), 'media' => array());
         $stream = fopen('php://memory', 'wb+');
         try {
@@ -112,7 +129,7 @@ class ExportFamilyBookData extends AbstractModule
         } finally {
             fclose($stream);
             $this->media_collector = null;
-            $_POST = $post;
+            $this->settings = $settings;
         }
     }
 
@@ -160,27 +177,17 @@ class ExportFamilyBookData extends AbstractModule
     }
 
     /**
-     * This function is called from ExportFamilyBook::postChartAction if mod_action is "export_latex" or "export_graphml".
+     * Write the export to a stream (called by ExportFamilyBook::handleForm)
+     *
+     * @param string $export_type 'latex' or 'graphml'
+     * @param resource $stream writable stream; it is rewound after the export
+     * @return resource the stream
      */
-    public function export(ServerRequestInterface $request,  $stream)
+    public function export(string $export_type, $stream)
     {
-
-        $tree = $request->getAttribute('tree');
-        assert($tree instanceof Tree);
-
-        $parsedBodys = $request->getParsedBody();
-
-        // mod_action value is set by the definition of the submit button
-        if (array_key_exists('mod_action', $parsedBodys)) {
-            $mod_action = $parsedBodys['mod_action'];
-        } else {
-            $mod_action = "";
-        };
-
-        $this->tree = $tree;
         fwrite($stream, pack("CCC", 0xef, 0xbb, 0xbf));
 
-        if ($mod_action == "export_graphml") {
+        if ($export_type === "graphml") {
             $this->exportGraphml($stream);
         } else {
             $this->exportLatex($stream);
@@ -295,8 +302,8 @@ class ExportFamilyBookData extends AbstractModule
         }
         if ($place) {
             // check if default format to be used
-            if (!$format and array_key_exists("default_place_format", $_POST)) {
-                $format = $_POST["default_place_format"];
+            if (!$format and array_key_exists("default_place_format", $this->settings)) {
+                $format = $this->settings["default_place_format"];
             }
 
             if (!$format) {
@@ -351,8 +358,8 @@ class ExportFamilyBookData extends AbstractModule
     {
         if ($date instanceof Date) {
             // check if default format to be used
-            if (!$format and array_key_exists("default_date_format", $_POST)) {
-                $format = $_POST["default_date_format"];
+            if (!$format and array_key_exists("default_date_format", $this->settings)) {
+                $format = $this->settings["default_date_format"];
             }
 
             $date_label = $this->cached(
@@ -450,8 +457,8 @@ class ExportFamilyBookData extends AbstractModule
             } else {
                 $s = 'unknown';
             }
-            if (array_key_exists('default_portrait_' . $s, $_POST)) {
-                $portrait_fallback = $_POST['default_portrait_' . $s];
+            if (array_key_exists('default_portrait_' . $s, $this->settings)) {
+                $portrait_fallback = $this->settings['default_portrait_' . $s];
             } else {
                 $portrait_fallback = "";
             }
@@ -466,8 +473,8 @@ class ExportFamilyBookData extends AbstractModule
                 $portrait_file = $portrait->filename();
                 if ($servername) {
                     // get the full server name including path
-                    $document_root = $_SERVER['DOCUMENT_ROOT'];
-                    $script_name = $_SERVER['SCRIPT_NAME'];
+                    $document_root = $this->server_params['DOCUMENT_ROOT'];
+                    $script_name = $this->server_params['SCRIPT_NAME'];
                     $web_page = substr($script_name, 0, strrpos($script_name, '/'));
                     $portrait_file = $document_root . $web_page .
                         "/data/media/" . $portrait_file;
@@ -2818,16 +2825,11 @@ class ExportFamilyBookData extends AbstractModule
     {
 
         $seeds = array();
-        $all_seeds = array_key_exists('branch_seeds', $_POST) ? $_POST["branch_seeds"] : '';
-        if (array_key_exists('refid', $_POST)) {
-            $xref = $_POST["refid"];
-            if ($xref === "" && array_key_exists('xref', $_GET)) {
-                $xref = $_GET["xref"];
-            }
-        } else if ((array_key_exists('xref', $_GET))) {
-            $xref = $_GET["xref"];
-        } else {
-            $xref = '';
+        $all_seeds = array_key_exists('branch_seeds', $this->settings) ? $this->settings["branch_seeds"] : '';
+        // the reference individual of the form, else the individual of the address of the page
+        $xref = $this->settings["refid"] ?? '';
+        if ($xref === '') {
+            $xref = $this->url_xref;
         }
         $seeds_default = array(
             "xref" => $xref,
@@ -2942,10 +2944,10 @@ class ExportFamilyBookData extends AbstractModule
             #
             $branch = 1;
             if (
-                array_key_exists('refid', $_POST) and $_POST["refid"] and
-                $this->canExport(Registry::individualFactory()->make($_POST["refid"], $this->tree))
+                array_key_exists('refid', $this->settings) and $this->settings["refid"] and
+                $this->canExport(Registry::individualFactory()->make($this->settings["refid"], $this->tree))
             ) {
-                $xref = $_POST["refid"];
+                $xref = $this->settings["refid"];
                 $record = Registry::gedcomRecordFactory()->make($xref, $this->tree);
                 // first determin relationships without spouses
                 $this->setFAMSFAMC(array(array(
@@ -3196,16 +3198,16 @@ class ExportFamilyBookData extends AbstractModule
                 }
                 // now replace with custom symbols
                 $replacement = array(
-                    'F' => $_POST["ref_father"] . '-',
-                    'M' => $_POST["ref_mother"] . '-',
-                    'S' => $_POST["ref_son"] . '-',
-                    'D' => $_POST["ref_daughter"] . '-',
-                    'W' => $_POST["ref_wife"] . '-',
-                    'H' => $_POST["ref_husband"] . '-',
-                    'f' => 'a' . $_POST["ref_father"] . '-',
-                    'm' => 'a' . $_POST["ref_mother"] . '-',
-                    's' => 'a' . $_POST["ref_son"] . '-',
-                    'd' => 'a' . $_POST["ref_daughter"] . '-'
+                    'F' => $this->settings["ref_father"] . '-',
+                    'M' => $this->settings["ref_mother"] . '-',
+                    'S' => $this->settings["ref_son"] . '-',
+                    'D' => $this->settings["ref_daughter"] . '-',
+                    'W' => $this->settings["ref_wife"] . '-',
+                    'H' => $this->settings["ref_husband"] . '-',
+                    'f' => 'a' . $this->settings["ref_father"] . '-',
+                    'm' => 'a' . $this->settings["ref_mother"] . '-',
+                    's' => 'a' . $this->settings["ref_son"] . '-',
+                    'd' => 'a' . $this->settings["ref_daughter"] . '-'
                 );
                 $new_ref = "";
                 foreach (str_split($ref) as $char) {
@@ -3574,7 +3576,7 @@ class ExportFamilyBookData extends AbstractModule
     {
 
         // get parameter entered in the web form (older settings: see familyNodeSettings)
-        $parameter = self::familyNodeSettings($_POST);
+        $parameter = self::familyNodeSettings($this->settings);
 
         $this->generationInd  = array();
         $this->include_exclude_media = array();
@@ -4035,8 +4037,8 @@ class ExportFamilyBookData extends AbstractModule
     private function exportLatex($gedout)
     {
 
-        // get parameter entered in the web form
-        $parameter = $_POST;
+        // settings of the export
+        $parameter = $this->settings;
 
         $this->generationInd  = array();
         $this->include_exclude_media = array();

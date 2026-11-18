@@ -27,6 +27,7 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\StreamFactoryInterface;
+use Psr\Http\Message\UploadedFileInterface;
 use League\Flysystem\FilesystemException;
 
 /**
@@ -566,7 +567,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         $review = (int) $user->getPreference(self::PREF_MEDIA_REVIEW . $tree->id(), '0');
         $profile = $this->profileBarData($request, $tree, 'media');
 
-        $selection = $this->mediaSelection($tree, $individual, $profile['active']);
+        $selection = $this->mediaSelection($request, $tree, $individual, $profile['active']);
 
         return $this->viewResponse($this->name() . '::media', array_merge(
             $this->mediaPageData($tree, $selection, $review),
@@ -615,7 +616,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             $user->setPreference(self::PREF_MEDIA_REVIEW . $tree->id(), (string) time());
             FlashMessages::addMessage(e(I18N::translate('The images have been marked as reviewed.')), 'success');
         } elseif ($mod_action === 'save_media') {
-            $selection = $this->mediaSelection($tree, $individual, $profile);
+            $selection = $this->mediaSelection($request, $tree, $individual, $profile);
             if ($selection['error']) {
                 // nothing is saved, the message is already set
                 return redirect($url);
@@ -668,6 +669,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
      * Uses the selection of the LaTeX export (individuals of the branches, media loops of the templates,
      * privacy), see ExportFamilyBookData::collectLatexMedia().
      *
+     * @param ServerRequestInterface $request
      * @param Tree $tree
      * @param Individual|null $individual reference individual
      * @param string $profile ID of the profile ('' = Standard)
@@ -675,13 +677,13 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
      *         error: true if a template or the branch list has an error (message set, no images)
      *         include/exclude: media IDs (upper case) of the lists include_media/exclude_media
      */
-    private function mediaSelection(Tree $tree, ?Individual $individual, string $profile): array
+    private function mediaSelection(ServerRequestInterface $request, Tree $tree, ?Individual $individual, string $profile): array
     {
         $settings = $this->readProfileSettings('latex', $tree, $profile);
         $settings['refid'] = $individual?->xref() ?? '';
 
         try {
-            $collected = (new ExportFamilyBookData())->collectLatexMedia($tree, $settings);
+            $collected = $this->exportData($request, $tree, 'latex', $settings)->collectLatexMedia();
             $error = false;
         } catch (ExportFamilyBookTemplateException $ex) {
             // error in a template or in the branch list: the page shows the message and no images
@@ -858,18 +860,14 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         $this->checkAccess($request, $tree);
         $this->rememberReferenceIndividual($request, $tree);
 
-        $parsedBodys = $request->getParsedBody();
+        $parsedBodys = $this->formData($request);
 
-        // set settings to null as default value 
+        // set settings to null as default value
         $settings = null;
 
-        // mod_action value is set by the definition od the submit button
-        if (array_key_exists('mod_action', $parsedBodys)) {
-            $mod_action = $parsedBodys['mod_action'];
-        } else {
-            $mod_action = "";
-        };
+        // mod_action value is set by the definition of the submit button;
         // each page handles only the actions of its own export type
+        $mod_action = $parsedBodys['mod_action'] ?? '';
         if (!is_string($mod_action) || !str_ends_with($mod_action, '_' . $page_type)) {
             $mod_action = "";
         }
@@ -886,9 +884,9 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
                 // end of copy from GedcomExportService::export
 
-                $exportData = new ExportFamilyBookData();
+                $export_type = ($mod_action == 'export_latex') ? 'latex' : 'graphml';
                 try {
-                    $resource = $exportData->export($request, $stream);
+                    $resource = $this->exportData($request, $tree, $export_type, $parsedBodys)->export($export_type, $stream);
                 } catch (ExportFamilyBookTemplateException $ex) {
                     // error in a template or in the branch list: show the form again with the
                     // submitted values and the message instead of the download
@@ -931,7 +929,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
                 $export_type = ($mod_action == 'download_settings_graphml') ? 'graphml' : 'latex';
                 $download_filename = "export_{$export_type}_settings.json";
 
-                $stream   = $this->stream_factory->createStream($this->encodeSettings($export_type, $_POST));
+                $stream   = $this->stream_factory->createStream($this->encodeSettings($export_type, $parsedBodys));
                 $response = $this->response_factory->createResponse()
                     ->withBody($stream)
                     ->withHeader('content-type', 'application/json; charset=UTF-8')
@@ -940,15 +938,12 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
             case "upload_settings_graphml":
             case "upload_settings_latex":
                 // set the setting variable based on the uploaded file
-                // upload the formula data into a local file
-                // get temporary file name of the uploaded file on the server
-                if ($_FILES['uploadedfile']['error'] === UPLOAD_ERR_OK) {
-                    $uploaded_file = $_FILES['uploadedfile']['tmp_name'];
-
+                $uploaded_file = $request->getUploadedFiles()['uploadedfile'] ?? null;
+                if ($uploaded_file instanceof UploadedFileInterface && $uploaded_file->getError() === UPLOAD_ERR_OK) {
                     // Read the content of the uploaded file (JSON or the old base64/serialize format)
                     $export_type = ($mod_action == 'upload_settings_graphml') ? 'graphml' : 'latex';
                     try {
-                        $settings = $this->decodeSettings($export_type, (string) file_get_contents($uploaded_file));
+                        $settings = $this->decodeSettings($export_type, (string) $uploaded_file->getStream());
                     } catch (UnexpectedValueException $ex) {
                         FlashMessages::addMessage(e(I18N::translate('The settings file could not be read: %s', $ex->getMessage())), 'danger');
                     }
@@ -1421,6 +1416,64 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
         }
 
         return $settings;
+    }
+
+    /**
+     * The submitted form data of a request (empty if the request has no form data)
+     *
+     * @param ServerRequestInterface $request
+     * @return array<string,mixed>
+     */
+    public function formData(ServerRequestInterface $request): array
+    {
+        $body = $request->getParsedBody();
+
+        return is_array($body) ? $body : array();
+    }
+
+    /**
+     * The settings of an export: the setting fields of the export type, completed with default values
+     *
+     * This is the only place where the settings for the export are put together. Only text values of
+     * the setting fields are used (see settingsFromForm). GraphML: missing fields of the family nodes
+     * get the values of older settings (see ExportFamilyBookData::familyNodeSettings). Every other
+     * missing setting field is empty. The form always sends all fields of its export type, so the
+     * default values matter only for incomplete data (e.g. settings of a profile).
+     *
+     * @param string $export_type 'latex' or 'graphml'
+     * @param array $values form data or saved settings
+     * @return array<string,string>
+     */
+    public function exportSettings(string $export_type, array $values): array
+    {
+        $settings = $this->settingsFromForm($export_type, $values);
+        if ($export_type === 'graphml') {
+            $settings = ExportFamilyBookData::familyNodeSettings($settings);
+        }
+
+        return $settings + array_fill_keys($this->settingsFields($export_type), '');
+    }
+
+    /**
+     * The export with the settings of a form (or of saved settings) for a request
+     *
+     * @param ServerRequestInterface $request
+     * @param Tree $tree
+     * @param string $export_type 'latex' or 'graphml'
+     * @param array $values form data or saved settings, see exportSettings
+     * @return ExportFamilyBookData
+     */
+    private function exportData(ServerRequestInterface $request, Tree $tree, string $export_type, array $values): ExportFamilyBookData
+    {
+        // xref of the address of the page: the start of the default branch if no reference individual is set
+        $url_xref = $request->getQueryParams()['xref'] ?? '';
+
+        return new ExportFamilyBookData(
+            $tree,
+            $this->exportSettings($export_type, $values),
+            is_string($url_xref) ? $url_xref : '',
+            $request->getServerParams()
+        );
     }
 
     /**
