@@ -849,11 +849,4 @@ trait ExportFamilyBookBranches
         return $set;
     }
 
-    /**
-     * Short title of a list for messages
-     */
-    private function branchListTitle(string $list): string
-    {
-        return $this->pageTitle($list);
-    }
 }

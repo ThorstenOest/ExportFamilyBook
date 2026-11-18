@@ -6,11 +6,6 @@
  * This file is included in the module.php file
  */
 
-//namespace haduloha\ExportFamilyBook\ExportFamilyBookData;
-
-//use Aura\Router\RouterContainer;
-//use Exception;
-//use Fig\Http\Message\RequestMethodInterface;
 use Fisharebest\Webtrees\Auth;
 use Fisharebest\Webtrees\Registry;
 use Fisharebest\Webtrees\I18N;
@@ -22,23 +17,9 @@ use Illuminate\Database\Query\Expression;
 use Fisharebest\Webtrees\GedcomRecord;
 use Fisharebest\Webtrees\Gedcom;
 use Fisharebest\Webtrees\Media;
-use Fisharebest\Webtrees\Module\ModuleCustomInterface;
-use Fisharebest\Webtrees\Module\ModuleChartInterface;
-use Fisharebest\Webtrees\Module\ModuleCustomTrait;
-use Fisharebest\Webtrees\Module\ModuleChartTrait;
-use Fisharebest\Webtrees\Menu;
-use Fisharebest\Webtrees\View;
 use Fisharebest\Webtrees\Tree;
-//use Fisharebest\Webtrees\Webtrees;
 use Fisharebest\Webtrees\Elements\UnknownElement;
-use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
-use Illuminate\Support\Collection;
-
-//use Psr\Http\Message\ResponseFactoryInterface;
-//use Psr\Http\Message\StreamFactoryInterface;
-
-
 
 /**
  * Error in a template or in the branch list that the user can correct in the form
@@ -55,7 +36,6 @@ class ExportFamilyBookTemplateException extends RuntimeException
  */
 class ExportFamilyBookData extends AbstractModule
 {
-
 
     // variables used in different functions 
     private $generationInd  = array();
@@ -185,8 +165,6 @@ class ExportFamilyBookData extends AbstractModule
     public function export(ServerRequestInterface $request,  $stream)
     {
 
-        #global $WT_TREE;
-
         $tree = $request->getAttribute('tree');
         assert($tree instanceof Tree);
 
@@ -199,36 +177,7 @@ class ExportFamilyBookData extends AbstractModule
             $mod_action = "";
         };
 
-        #$this->tree = $WT_TREE;
         $this->tree = $tree;
-        /*
-        // file name is set to the tree name
-        $download_filename = $this->tree->name();
-        $extension = ($mod_action == 'export_latex') ? ".tex" : ".graphml";
-        if (
-            strtolower(substr($download_filename, -8, 8)) !=
-            $extension
-        ) {
-            $download_filename .= $extension;
-        }
-*/
-        /*
-        // Stream the file straight to the browser.
-        header('Content-Type: text/plain; charset=UTF-8');
-        header('Content-Disposition: attachment; filename="' . $download_filename . '"');
-
-        // Create a buffer to store the file content
-        ob_start();
-
-        // Write Byte Order Mark
-        echo pack("CCC", 0xef, 0xbb, 0xbf);
-        
-        // $stream = fopen('php://output', 'w');
-        // $stream = "";
-        // Set Byte Order Mark
-        #fwrite($stream, pack("CCC", 0xef, 0xbb, 0xbf));
- 
-        */
         fwrite($stream, pack("CCC", 0xef, 0xbb, 0xbf));
 
         if ($mod_action == "export_graphml") {
@@ -236,10 +185,6 @@ class ExportFamilyBookData extends AbstractModule
         } else {
             $this->exportLatex($stream);
         }
-        #fclose($stream);
-        // Close output buffer
-        //ob_end_flush();
-        // exit;
 
         if (rewind($stream) === false) {
             throw new RuntimeException('Cannot rewind temporary stream');
@@ -300,13 +245,9 @@ class ExportFamilyBookData extends AbstractModule
                     // - a given name is also included abbreviated if the positions is
                     // included in $format followed by "."
                     $givn .= " " . $exp_givn[$i][0] . ".";
-                    //$givn .= " " . $exp_givn [$i] {0} . ".";
                 }
             }
         }
-
-
-
 
         // now replace unknown names with three dots
         $givn = str_replace(
@@ -414,7 +355,6 @@ class ExportFamilyBookData extends AbstractModule
                 $format = $_POST["default_date_format"];
             }
 
-            //            $date_label = strip_tags($date->display(false, $format));
             $date_label = $this->cached(
                 $date,
                 'display|' . $format,
@@ -439,18 +379,12 @@ class ExportFamilyBookData extends AbstractModule
      */
     private function graphml_fwrite($gedout, $buffer)
     {
-        #fwrite($gedout, mb_convert_encoding($buffer, 'UTF-8'));
         $buffer_encoded = mb_convert_encoding($buffer, 'UTF-8');
         $bytes_written = fwrite($gedout, $buffer_encoded);
 
         if ($bytes_written !== strlen($buffer_encoded)) {
             throw new RuntimeException('Unable to write to stream.  Perhaps the disk is full?');
         }
-        // write output to buffer
-        //echo mb_convert_encoding($buffer, 'UTF-8');
-        // Flush the output buffer to send data to the client immediately
-        //ob_flush();
-        //flush();
     }
 
     /**
@@ -527,7 +461,6 @@ class ExportFamilyBookData extends AbstractModule
             // return the fallback figure if $format == "silhouette"
             $portrait_file = $portrait_fallback;
         } else {
-            //$portrait = $record->findHighlightedMedia();
             $portrait = $this->portraitFile($record);
             if ($portrait) {
                 $portrait_file = $portrait->filename();
@@ -1003,7 +936,6 @@ class ExportFamilyBookData extends AbstractModule
             $label = null;
         } else {
             $label = $element->label();
-            //$label = I18N::translate($element->label());
         }
 
         return $label;
@@ -1017,16 +949,11 @@ class ExportFamilyBookData extends AbstractModule
      *
      * @return Boolean
      */
-    //static $time_counter = 0;
-    //static $time_start = microtime(true);
-
     private function increaseTimeLimit()
     {
-        //global  $time_counter, $time_start;
         static $time_counter = 0;
         static $time_start;
 
-        //if (empty($counter)) $counter = 0;
         if (empty($time_start)) $time_start = microtime(true);
 
         $time_counter++;
@@ -1152,7 +1079,6 @@ class ExportFamilyBookData extends AbstractModule
             $format = $template[3];
 
             // remove line breaks
-            //$template = trim ( preg_replace ( '/\s+/', ' ', $template ) );
             $template = preg_replace("/([^\s])\s*[\n\r]\s*([^\s])/", "$1 $2", $template);
             // remove space between double brackets
             foreach ($bracket_array as $bra) {
@@ -1162,14 +1088,6 @@ class ExportFamilyBookData extends AbstractModule
                     $template
                 );
             }
-
-            // start with an "{" to remove everything if no data are found
-            /*
-			$template_array = array (
-					array ("component" => $bracket_array [0],"type" => 'string',
-							"format" => "","fact" => "", "subtemplate" => "" 
-					) 
-			);*/
 
             $i = 1;
             $pos_end = 3;
@@ -1242,14 +1160,6 @@ class ExportFamilyBookData extends AbstractModule
                                 $pos_bracket_end - $pos_bracket - 1
                             );
                         $template_array[$i] = $this->splitTemplate($subTemplate)[0];
-                        /*
-                                        $template_array [$i] = array (
-                                                        "component" => "",
-                                                        "type" => "term", 
-                                                        "format" => "",
-                                                        "fact" => "",
-                                                        "subtemplate" => $this->splitTemplate ($subTemplate )[0]
-                                        );*/
                         // set position end to the end of bracket term
                         $pos_end = $pos_bracket_end;
                         $i++;
@@ -1262,21 +1172,6 @@ class ExportFamilyBookData extends AbstractModule
                     }
                 } elseif ($pos !== false) {
                     // there is a remaining tag symbol
-                    /*
-					if ($pos > $pos_end + 1) {
-						// there is a string preceeding the tag symbol
-						// add the string to the return array
-						// substring {...} are removed
-						$template_array [$i] = array (
-								"component" => $this->removeBrackets ( 
-										substr ( $template, $pos_end + 1, 
-												$pos - $pos_end - 1 ), 
-										$bracket_array ),"type" => "string",
-								"format" => "","fact" => "", "subtemplate" => ""
-						);
-						$i ++;
-					}
-					*/
                     // now the tag is added to the return array
                     // search for the end of the tag
                     $pos_end = strpos($template, $tag, $pos + 1);
@@ -1303,7 +1198,6 @@ class ExportFamilyBookData extends AbstractModule
                         $pos + 1,
                         $pos_format - $pos - 1
                     );
-
 
                     if ($pos_end !== false) {
                         if (substr($template, $pos, 8) === "@Foreach") {
@@ -1345,7 +1239,6 @@ class ExportFamilyBookData extends AbstractModule
                         } else {
                             // this is a single tag
                             // get the format definition
-                            //$pos_format = strpos ( $template, $format, $pos );
                             if (substr($component, 0, 4) !== "Fact") {
                                 $template_array[$i] = array(
                                     "component" => $component,
@@ -1374,23 +1267,6 @@ class ExportFamilyBookData extends AbstractModule
                 }
             }
 
-            // end with an "}" matching the "{" at the beginning
-            /*$template_array [$i] = array ("component" => $bracket_array [1],
-					"type" => 'string',"format" => '',"fact" => '', "subtemplate" => "" 
-			);
-                           */
-
-
-            // now search for tags defining facts and filling the
-            // "fact" array element
-            /*
-			for($j = 0; $j < $i; $j ++) {
-				if ($template_array [$j] ["type"] == "tag" and substr ( $template_array [$j] ["component"], 0, 4 ) == "Fact") {
-					$template_array [$j] ["fact"] = substr ( 
-							$template_array [$j] ["component"], 4 );
-					$template_array [$j] ["component"] = "Fact";
-				}
-			}*/
         } else {
             // template is shorter than 4 letters and has no definition of special symbols
             if (strlen($template) > 1) {
@@ -1492,7 +1368,6 @@ class ExportFamilyBookData extends AbstractModule
         return ($pos_right);
     }
 
-
     /**
      * Remove brackets
      *
@@ -1534,7 +1409,6 @@ class ExportFamilyBookData extends AbstractModule
     private function getAllAttributes($fact, $tag, $level = 2)
     {
         $gedcom = $fact->gedcom();
-        //$gedcom = $fact->getGedcom();
         if (preg_match_all('/\n' . $level . ' (?:' . $tag . ') ?(.*(?:(?:\n3 CONT ?.*)*)*)/', $gedcom, $match)) {
             return preg_replace("/\n' . ($level +1 ) . ' CONT ?/", "\n", $match[1]);
         } else {
@@ -1555,7 +1429,6 @@ class ExportFamilyBookData extends AbstractModule
         $res = null;
 
         $adopt_FAMC = trim($fact->attribute("FAMC"), "@");
-        //$adopt_FAMC = trim($fact->getAttribute("FAMC"), "@");
         $ADOP = $this->getAllAttributes($fact, "ADOP", 3);
 
         if (!is_null($ADOP)) {
@@ -1588,7 +1461,6 @@ class ExportFamilyBookData extends AbstractModule
      */
     private function checkADOP($child, $FAMC, $parent = null)
     {
-        //$a = self::getADOP($child, $FAMC);
 
         if (is_null($child)) return ("");
 
@@ -1799,9 +1671,6 @@ class ExportFamilyBookData extends AbstractModule
         $fact_type = "",
         $name_key = ""
     ) {
-        //global $this->generationInd;
-        //global $include_exclude_media;
-        //global $this->media_included;
         if (!isset($this->media_included)) $this->media_included = array();
 
         if ($record instanceof Fisharebest\Webtrees\Individual) {
@@ -1823,7 +1692,6 @@ class ExportFamilyBookData extends AbstractModule
             foreach ($template as $comp) {
                 $tag_replacement = "";
                 $empty_tag_found = false;
-                //$new_string = '';
                 $format = $comp["format"];
 
                 if ($comp["type"] == "term") {
@@ -1854,8 +1722,6 @@ class ExportFamilyBookData extends AbstractModule
                 } elseif ($comp["type"] == "string") {
                     // element is a string, add it to $new_string
                     $nodetext .= $comp["component"];
-                    //$nodetext .= $this->substituteSpecialCharacters (
-                    //                      $comp ["component"], $doctype);
                 } elseif ($comp["type"] == "tag") {
                     // element is a tag, get the tag data
 
@@ -1993,7 +1859,6 @@ class ExportFamilyBookData extends AbstractModule
                         case "BirthDate":
                             $tag_replacement .= $this->formatDate(
                                 $this->recordValue($record, "getBirthDate"),
-                                //$record->getEstimatedBirthDate(),
                                 $this->get_format($format, 0)
                             );
                             $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
@@ -2045,7 +1910,6 @@ class ExportFamilyBookData extends AbstractModule
                             $xref = $record->xref();
                             if (array_key_exists($xref, $this->generationInd)) {
                                 $tag_replacement .= $this->generationInd[$xref]["reference"];
-                                //$tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype );
                             }
                             break;
                         case "Link":
@@ -2087,11 +1951,9 @@ class ExportFamilyBookData extends AbstractModule
                                 } else {
                                     // masked once (masking twice would mask the masking characters again)
                                     $tag_replacement .= $this->substituteSpecialCharacters(
-                                        //GedcomTag::getLabel($fact_type, $record_context),
                                         (string) $this->getGEDCOMTagLabel($fact_type, $record_context->tag()),
                                         $doctype
                                     );
-
 
                                     $tag_replacement = $this->get_format($format, 1) . $tag_replacement;
                                     $tag_replacement = $tag_replacement . $this->get_format($format, 2);
@@ -2111,50 +1973,29 @@ class ExportFamilyBookData extends AbstractModule
                                 $tag_replacement .= $record->Value();
                             }
 
-                            //	$tag_replacement .= $record->Value();
                             $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
                             break;
                         case "FeFactDate":
                             $tag_replacement .= $this->formatDate($record->date(), $this->get_format($format, 0));
-                            //$tag_replacement .= $this->formatDate($record->getDate(), $this->get_format($format, 0));
                             $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
                             break;
                         case "FeFactPlace":
                             $tag_replacement .= $this->formatPlace($record->place(), $this->get_format($format, 0));
-                            //$tag_replacement .= $this->formatPlace($record->getPlace(), $this->get_format($format, 0));
                             $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
                             break;
                         case "FeFactAttribute":
                             if ($fact_type == 'DATE') {
                                 $tag_replacement .= $this->formatDate($record->date(), $this->get_format($format, 0));
-                                //$tag_replacement .= $this->formatDate($record->getDate(), $this->get_format($format, 0));
                             } else if ($fact_type == 'PLAC') {
                                 $tag_replacement .= $this->formatPlace($record->place(), $this->get_format($format, 0));
-                                //$tag_replacement .= $this->formatPlace($record->getPlace(), $this->get_format($format, 0));
                             } else {
                                 $tag_replacement .= $record->attribute($fact_type);
                             }
                             $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
                             break;
                         case "FeFactNote":
-                            //$notes = $record->getNotes();
-                            // does not work
-                            //$notes = $record->notes();
-                            //$notes = $record->getNote();
                             // get Note fact
                             $n = $record->attribute('NOTE');
-                            /*
-                            $note_facts = $record->facts(['NOTE'], false); // unsorted
-                            foreach ($note_facts as $note_fact) {
-                                $note = $note_fact->target();
-                                if ($note instanceof Note) {
-                                    $n = $note->getNote();
-                                } else {
-                                    // Inline note
-                                    $n = $fact->value();
-                                }
-                    */
-                            //foreach ($notes as $n) {
                             if ($n !== "") {
                                 $tag_replacement .= $this->substituteSpecialCharacters($n, $doctype) . '\\ ';
                             }
@@ -2175,11 +2016,9 @@ class ExportFamilyBookData extends AbstractModule
                                 // return full file name
                                 $tag_replacement .= $filename;
                             }
-                            //$tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype );
                             break;
                         case "FeMediaId":
                             $tag_replacement .= $record->factId();
-                            //$tag_replacement .= $record->xref();
                             break;
                         case "FeMediaCaption":
                             $tag_replacement .= $record->title();
@@ -2187,7 +2026,6 @@ class ExportFamilyBookData extends AbstractModule
                             break;
                         case "FeReferenceName":
                             $tag_replacement .= $this->source_list[str_replace('@', '', $record)];
-                            //$tag_replacement .= str_replace('@', '', str_replace('S', '', $record));
                             $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
                             break;
                         case "FeStepparents":
@@ -2257,7 +2095,6 @@ class ExportFamilyBookData extends AbstractModule
                             if ($marriage) {
                                 $tag_replacement .= $this->formatPlace(
                                     $marriage->place(),
-                                    //$marriage->getPlace(),
                                     $this->get_format($format, 0)
                                 );
                                 $tag_replacement = $this->substituteSpecialCharacters($tag_replacement, $doctype);
@@ -2270,43 +2107,22 @@ class ExportFamilyBookData extends AbstractModule
                                 $search_array[] = "/\Q" . $f . '\E(?=[\\r\\n\\' . $brackets[0] . '\\' . $brackets[1] . '\s]*$)/';
                                 $replace_array[] = '';
                             };
-                            //if (str_replace(array("\n"," "),"",$nodetext) != '') {
-                            //$nodetext = $this->removeBrackets ( 
-                            //		$nodetext, $brackets );
                             do {
                                 $old_length = strlen($nodetext);
                                 $nodetext = preg_replace($search_array, $replace_array, $nodetext);
                                 $new_length = strlen($nodetext);
                             } while ($old_length !=  $new_length);
-                            /*	
-							} else {
-								do {
-									$old_length = strlen($nodetext);
-									$nodetext = preg_replace ( $search_array, $replace_array, $nodetext );
-									$new_length = strlen($nodetext);
-								} while($old_length !=  $new_length);
-							}*/
                             break;
                         case "Replace":
                             if (count($format) > 1) {
                                 $search_array = "/\Q" . $format[0] . '\E(?=[\\r\\n\\' . $brackets[0] . '\\' . $brackets[1] . '\s]*$)/';
                                 $replace_array = str_replace('\\', '\\\\', $format[1]);
-                                //if (str_replace(array("\n"," "),"",$nodetext) != '') {
-                                //$new_string = $this->removeBrackets (
-                                //		$new_string, $brackets );
                                 do {
                                     $old_length = strlen($nodetext);
                                     $nodetext = preg_replace($search_array, $replace_array, $nodetext);
                                     $new_length = strlen($nodetext);
                                 } while ($old_length !=  $new_length);
 
-                                /*} else {
-									do {
-										$old_length = strlen($nodetext);
-										$nodetext = preg_replace ( $search_array, $replace_array, $nodetext );
-										$new_length = strlen($nodetext);
-									} while($old_length !=  $new_length);
-								}*/
                             }
                             break;
                         default:
@@ -2393,7 +2209,6 @@ class ExportFamilyBookData extends AbstractModule
                                         if (strpos($tag, ':') !== FALSE) $tag = substr($tag, strripos($tag, ':') + 1);
                                         // store the tag
                                         $fact_types[] = $tag;
-                                        //$fact_types[] = $fact_record->getTag();
                                     }
                                 }
                                 $fact_types = array_unique($fact_types);
@@ -2411,7 +2226,6 @@ class ExportFamilyBookData extends AbstractModule
                             }
                             // loop over all fact types
                             foreach ($fact_types as $fact_type) {
-                                //foreach (explode ( ',', $comp["format"] [0]) as $fact_type ) {
                                 // loop over facts of the same type sorted
                                 $counter += 1;
                                 list($term_tag_replacement, $term_tag_resolved) =  $this->substitutePlaceHolder(
@@ -2523,7 +2337,6 @@ class ExportFamilyBookData extends AbstractModule
                                         $files = $media_record->mediaFiles();
 
                                         if ($use and $media_record->canShow() and count($files) > 0) {
-                                            //$files = $media_record->facts(['FILE'], true);
                                             foreach ($files as $file) {
                                                 $usefile = true;
                                                 // check if type is in format[0]
@@ -2638,31 +2451,13 @@ class ExportFamilyBookData extends AbstractModule
                             throw $this->unknownPlaceholder($comp["component"]);
                     }
                 }
-                //
                 if ($tag_replacement !== "" or $empty_tag_found !== false) {
                     // data for the tag exists
-                    // check for a {...} in $new_string and remove it
-                    //$new_string = $this->removeBrackets ( $new_string,
-                    //		$brackets );
-                    // add $new_string to $nodetext[$a]
-                    //$nodetext .= $new_string . $tag_replacement;
                     $nodetext .= $tag_replacement;
                     $tag_resolved = TRUE;
-                    //$new_string = '';
                 }
             }
 
-            /*
-			// add remaining strings to $nodetext
-			$new_string = $this->removeBrackets ( $new_string, $brackets );
-			$nodetext .= $new_string;
-			// remove all remaining brackets (which contain record data)
-			$nodetext = preg_replace ( 
-					array ("/\Q" . $brackets [0] . "\E/",
-							"/\Q" . $brackets [1] . "\E/" 
-					), array ("","" 
-					), $nodetext );
-			*/
             if ($doctype == "graphml") {
                 if (str_contains($nodetext, '<html>')) {
                     $nodetext = preg_replace("/<html>\s*<\/html>/", "", $nodetext);
@@ -2682,7 +2477,6 @@ class ExportFamilyBookData extends AbstractModule
 
         return array($nodetext, $tag_resolved);
     }
-
 
     /**
      * Substitute characters
@@ -2719,15 +2513,6 @@ class ExportFamilyBookData extends AbstractModule
                     "/<(?!br>)/", "&lt;"
                 )
             );
-            /*
-			 * // $subject = preg_replace ( '/&nbsp;/', ' ', $subject );
-			 * $subject = preg_replace ( "/&/", "&amp;", $subject );
-			 * // $subject = preg_replace ( "/&(?![^ ][^&]*;)/", "&amp;", $subject);
-			 * $subject = preg_replace ( "/\"/", "&quot;", $subject );
-			 * $subject = preg_replace ( "/\'/", "&apos;", $subject );
-			 * $subject = preg_replace ( "/(?<!br)>/", "&gt;", $subject );
-			 * $subject = preg_replace ( "/<(?!br>)/", "&lt;", $subject );
-			 */
         }
         if ($doctype == "latex" || $doctype == "latex_filename") {
             // the replacements are done one after the other: braces are masked directly after the
@@ -2765,13 +2550,7 @@ class ExportFamilyBookData extends AbstractModule
                     '/\Q"\E/', '"{}'
                 ), array(
                     '/\n/', '\\ '
-                )/*,array ("/\Qö\E/",'\"o' 
-			),array ("/\Qä\E/",'\"a' 
-			),array ("/\Qü\E/",'\"u' 
-			),array ("/\QÖ\E/",'\"O' 
-			),array ("/\QÄ\E/",'\"A' 
-			),array ("/\QÜ\E/",'\"U' 
-			)*/
+                )
             );
             if ($doctype == "latex_filename") {
                 // without the replacements of "{", "}" and "~"
@@ -2839,18 +2618,6 @@ class ExportFamilyBookData extends AbstractModule
         $ret_string = "\n" . '\usepackage{filecontents}
 						\begin{filecontents}{\jobname.bib}';
 
-        /* old
-        $source_rows = Database::prepare(
-            "SELECT s_id,s_gedcom FROM `##sources` WHERE s_file = :tree_id"
-        )->execute(array(
-            'tree_id' => $this->tree->getTreeId(),
-        ))->fetchAll();
-        */
-        // fetchOne()
-        //$connection = DB::getConnection();
-        //$query = "SELECT s_id,s_gedcom FROM `##sources` WHERE s_file = ?";
-        //$source_rows = $connection->select($query, 
-        //                    [$this->tree->getTreeId()]);
         $source_rows = DB::table('sources')
             ->where('s_file', '=', $this->tree->id())
             ->select(['s_id AS xref', 's_gedcom AS gedcom', new Expression("'SOUR' AS type")])
@@ -2864,21 +2631,13 @@ class ExportFamilyBookData extends AbstractModule
             }
             $this->source_list[$id] = count($this->source_list) + 1;
             $ret_string .= "\n" . '@book{' .  $this->source_list[$id];
-            //$ret_string .= "\n" . '@book{' . str_replace(['S','X'], ['',''], $id);
-            //$record = GedcomRecord::getInstance($id, $this->tree);
             $record = Registry::gedcomRecordFactory()->make($id, $tree, $rows->gedcom);
-            // The object may have been deleted since we added it to the cart....
-            // if ($object instanceof GedcomRecord) {
 
-            //$facts = $record->facts(['TITL'])->filter();
             // title
             foreach ($record->facts(['TITL']) as $fact) {
-                //foreach ($record->facts('TITL') as $fact) {
                 $ret_string .= ',title   ="' . $this->bibtexValue($fact->Value()) . '"';
-                //$ret_string .= ',title   ="' . $fact->Value() . '"';
             }
             // author
-            //foreach ($record->facts('AUTH') as $fact) {
             foreach ($record->facts(['AUTH']) as $fact) {
                 // several authors are separated by commas in webtrees and by "and" in BibTeX
                 $ret_string .= ',author   ="' .
@@ -2902,22 +2661,15 @@ class ExportFamilyBookData extends AbstractModule
      */
     private function setFAMSFAMC($inds, $branch, $related_by_blood)
     {
-        // $this->generationInd must be declared as global in the function 
-        //global $this->generationInd;
 
         do {
             // first set flags for individuals
             foreach ($inds as $key => $ind_a) {
                 $generation = $ind_a["generation"];
                 $ind = $ind_a["ind"];
-                //error_log($ind, 0);
-                //if ($ind == 'I1030@20') {
-                //    error_log("here we are", 0);
-                //};
                 $reference = $ind_a["ref"];
                 if ($ind !== null) {
                     // set branch and generation
-                    //$xrefInd = $ind->xref();
                     $xrefInd = $ind->xref();
                     if (
                         empty($this->generationInd) or
@@ -2934,7 +2686,6 @@ class ExportFamilyBookData extends AbstractModule
                             $name
                         );
                         // spouse families
-                        //$FAMS = $record->spouseFamilies();
                         $FAMS = $this->spouseFamilies($record);
 
                         $this->generationInd[$xrefInd] = array(
@@ -3004,8 +2755,6 @@ class ExportFamilyBookData extends AbstractModule
                         }
                     };
 
-
-
                     // families of the same generation FAMS, i.e. generation +0
                     // get spouse and childreen
                     $FAMS = $this->spouseFamilies($ind);
@@ -3018,7 +2767,6 @@ class ExportFamilyBookData extends AbstractModule
                             $spouse = $this->wife($record);
                         };
                         if ($spouse !== null)    $this->generationInd[$xrefInd]["spouse"][] = $spouse->xref();
-                        //foreach ($spouse as $rec ) {
                         if (
                             $spouse !== null && !$related_by_blood &&
                             !array_key_exists($spouse->xref(), $this->generationInd)
@@ -3029,10 +2777,8 @@ class ExportFamilyBookData extends AbstractModule
                                 "generation" => $generation
                             );
                         }
-                        //}
 
                         // get children
-                        //$children = $record->children();
                         $children = $this->children($record);
                         foreach ($children as $child) {
                             // check if adopted
@@ -3073,7 +2819,6 @@ class ExportFamilyBookData extends AbstractModule
 
         $seeds = array();
         $all_seeds = array_key_exists('branch_seeds', $_POST) ? $_POST["branch_seeds"] : '';
-        //$all_seeds = $_POST["branch_seeds"];
         if (array_key_exists('refid', $_POST)) {
             $xref = $_POST["refid"];
             if ($xref === "" && array_key_exists('xref', $_GET)) {
@@ -3085,7 +2830,6 @@ class ExportFamilyBookData extends AbstractModule
             $xref = '';
         }
         $seeds_default = array(
-//            "xref" => "I1",
             "xref" => $xref,
             "name" => "not defined",
             "direction" => "both",
@@ -3115,7 +2859,6 @@ class ExportFamilyBookData extends AbstractModule
                     }
 
                     $seeds[] = $seeds_default;
-                    //$key = key($seeds);
                     end($seeds);
                     $key = key($seeds);
 
@@ -3152,45 +2895,6 @@ class ExportFamilyBookData extends AbstractModule
                         }
                     }
                 }
-                /*
-                                if (count($cols) == 3) {
-                                        $seeds[] = array("xref" => $cols[0],
-                                                        "name" => $cols[1], 
-                                                        "direction" => $cols[2],
-                                                        "stop" => array(),
-                                                        "hierarchy_sub_branch" => "",
-                                                        "hierarchy_generation" => "",
-                                                        "include" => TRUE
-                                        );
-                                } else if (count($cols) == 4){
-                                        $seeds[] = array("xref" => $cols[0],
-                                                        "name" => $cols[1],
-                                                        "direction" => $cols[2],
-                                                        "stop" => explode($sep2,$cols[3]),
-                                                        "hierarchy_sub_branch" => "",
-                                                        "hierarchy_generation" => "",
-                                                        "include" => TRUE
-                                            );
-                                } else if (count($cols) == 5){
-                                        $seeds[] = array("xref" => $cols[0],
-                                                        "name" => $cols[1],
-                                                        "direction" => $cols[2],
-                                                        "stop" => explode($sep2,$cols[3]),
-                                                        "hierarchy_sub_branch" => $cols[4],
-                                                        "hierarchy_generation" => "",
-                                                        "include" => TRUE
-                                            );
-                                } else if (count($cols) == 6){
-                                        $seeds[] = array("xref" => $cols[0],
-                                                        "name" => $cols[1],
-                                                        "direction" => $cols[2],
-                                                        "stop" => explode($sep2,$cols[3]),
-                                                        "hierarchy_sub_branch" => $cols[4],
-                                                        "hierarchy_generation" => $cols[5],
-                                                        "include" => $cols[6]
-                                                );
-                                }
-                                 */
             }
         }
         return $seeds;
@@ -3206,34 +2910,13 @@ class ExportFamilyBookData extends AbstractModule
     {
 
         // Get all individuals
-        /*
-        $rowsInd = Database::prepare(
-            "SELECT i_id AS xref" .
-                " FROM `##individuals` WHERE i_file = :tree_id ORDER BY i_id"
-        )->execute(
-            array(
-                'tree_id' => $this->tree->getTreeId()
-            )
-        )->fetchAll();
-        */
         $rowsInd = DB::table('individuals')
             ->where('i_file', '=', $this->tree->id())
             ->orderBy('i_id')
             ->select(['i_id AS xref', 'i_gedcom AS gedcom', new Expression("'INDI' AS type")])
             ->get();
 
-
         // Get all family records
-        /*
-        $rowsFam = Database::prepare(
-            "SELECT f_id AS xref" .
-                " FROM `##families` WHERE f_file = :tree_id ORDER BY f_id"
-        )->execute(
-            array(
-                'tree_id' => $this->tree->getTreeId()
-            )
-        )->fetchAll();
-        */
         $rowsFam = DB::table('families')
             ->where('f_file', '=', $this->tree->id())
             ->orderBy('f_id')
@@ -3251,11 +2934,6 @@ class ExportFamilyBookData extends AbstractModule
         foreach ($rowsFam as $row) {
             $xrefFam[] = $row->xref;
         };
-        //
-        //global $this->generationInd;
-
-        //
-        // 
 
         // loop over families to start with a new branch
         if ($sort) {
@@ -3268,7 +2946,6 @@ class ExportFamilyBookData extends AbstractModule
                 $this->canExport(Registry::individualFactory()->make($_POST["refid"], $this->tree))
             ) {
                 $xref = $_POST["refid"];
-                //$record = Individual::getInstance($xref, $this->tree);
                 $record = Registry::gedcomRecordFactory()->make($xref, $this->tree);
                 // first determin relationships without spouses
                 $this->setFAMSFAMC(array(array(
@@ -3300,8 +2977,6 @@ class ExportFamilyBookData extends AbstractModule
                     empty($this->generationInd) or
                     !array_key_exists($xref, $this->generationInd)
                 ) {
-                    //setGeneration ( $xref, $branch, 1 );
-                    //$record = Individual::getInstance($xref, $this->tree);
                     $record = Registry::individualFactory()->make($xref, $this->tree);
                     $this->setFAMSFAMC(array(array(
                         "ind" => $record,
@@ -3321,32 +2996,6 @@ class ExportFamilyBookData extends AbstractModule
                     $seeds_exported[] = $key;
                 }
             }
-            /*
-			$seeds = array();
-			$all_seeds = array_key_exists('branch_seeds', $_POST) ? $_POST["branch_seeds"] : '';
-			//$all_seeds = $_POST["branch_seeds"];
-			if (strlen($all_seeds) > 2) {
-				$sep1 = $all_seeds[0];
-				$sep2 = $all_seeds[1];
-				$all_seeds = substr($all_seeds,2);
-				foreach( explode("\n",$all_seeds) as $row) {
-					$row = trim($row);
-					$cols = explode($sep1,$row);
-					if (count($cols) == 3) {
-						$seeds[] = array("xref" => $cols[0],
-								"name" => $cols[1], 
-								"direction" => $cols[2],
-								"stop" => array()
-						);
-					} else if (count($cols) == 4){
-						$seeds[] = array("xref" => $cols[0],
-								"name" => $cols[1],
-								"direction" => $cols[2],
-								"stop" => explode($sep2,$cols[3]));
-					}
-				}
-			}
-			*/
             $number_of_branches = $branch - 1;
             $number_of_sub_branches = count($seeds);
 
@@ -3416,11 +3065,6 @@ class ExportFamilyBookData extends AbstractModule
                                     $this->generationInd[$ind]["spouse"],
                                     $this->generationInd[$ind]["children"]
                                 );
-                                // test
-                                //if ($this->generationInd[$ind]["sub_branch_id"] !== $xref_sub_branche_id) {
-                                //    $test2 = 0;
-                                //}
-                                //
                             }
                             $this->generationInd[$ind]["sub_branch"] = $name;
                             $this->generationInd[$ind]["sub_branch_id"] = $seed_no;
@@ -3498,7 +3142,6 @@ class ExportFamilyBookData extends AbstractModule
                 $branch = $row['branch'];
                 $generation = 1 + $this->generationInd[$key]['generation'] - $min_gen_of_branch[$branch];
                 $this->generationInd[$key]['generation'] = $generation;
-                //
                 $sub_branch_id = $row['sub_branch_id'];
                 $sub_branch = $row['sub_branch'];
                 if ($branch != $last_branch) {
@@ -3521,7 +3164,6 @@ class ExportFamilyBookData extends AbstractModule
                 $last_sub_branch_id = $sub_branch_id;
                 $last_branch = $branch;
                 $last_gen = $generation;
-                //
                 $gen_no += 1;
                 $this_gen_no = $generation . "." . $gen_no;
                 if ($number_of_sub_branches > 0) $this_gen_no = $sub_branch_no . "-" . $this_gen_no;
@@ -3553,15 +3195,6 @@ class ExportFamilyBookData extends AbstractModule
                     $ref = preg_replace('/(\w)\1{' . $i . '}/', ($i + 1) . '$1', $ref);
                 }
                 // now replace with custom symbols
-                /*
-				$search = array('F', 'M', 'S', 'D', 'W', 'H', 'f', 'm', 's', 'd');
-				$rep 	= array($_POST["ref_father"] . '-', $_POST["ref_mother"] . '-', 
-						$_POST["ref_son"] . '-', $_POST["ref_daughter"] . '-',
-						$_POST["ref_wife"] . '-', $_POST["ref_husband"] . '-',
-                                                'a' . $_POST["ref_father"] . '-', 'a' . $_POST["ref_mother"] . '-', 
-						'a' . $_POST["ref_son"] . '-', 'a' . $_POST["ref_daughter"] . '-'
-                                    );
-                                 */
                 $replacement = array(
                     'F' => $_POST["ref_father"] . '-',
                     'M' => $_POST["ref_mother"] . '-',
@@ -3576,17 +3209,14 @@ class ExportFamilyBookData extends AbstractModule
                 );
                 $new_ref = "";
                 foreach (str_split($ref) as $char) {
-                    //for( $i = 0; $i <= strlen($ref); $i++ ) {
                     if (array_key_exists($char, $replacement)) {
                         $new_ref = $new_ref . $replacement[$char];
                     } else {
                         $new_ref = $new_ref . $char;
                     }
 
-                    //                                    $new_ref = $new_ref . str_replace($search,$rep,substr($ref,$i,1));
                 }
                 $ref = $new_ref;
-                //$ref = str_replace($search,$rep,$ref);
                 $ref = substr($ref, 0, -1);
                 // set reference
                 $this->generationInd[$key]['reference'] = $ref;
@@ -3669,38 +3299,11 @@ class ExportFamilyBookData extends AbstractModule
                 if (!array_key_exists($generation, $generationInd_tree[$branch][$sub_branch_id])) $generationInd_tree[$branch][$sub_branch_id][$generation] = array();
                 $generationInd_tree[$branch][$sub_branch_id][$generation][$key] = $row;
             }
-            /*
-			// remove subbranches which only contains links
-			foreach ( $generationInd_tree as $branch => $branch_array) {
-				$remove_array = array();
-				foreach ( $branch_array as $sub_branch => $sub_branch_array ) {			
-					$remove = true;
-					foreach ( $sub_branch_array as $generation => $generation_array ) {
-						foreach ( $generation_array as $key => $value ) {
-							if ($value["sub_branch_link_id"] == -1) {
-								$remove = false;
-								break;
-							}
-						}
-						if (!$remove) break;
-					}
-					if ($remove) $remove_array[] = $sub_branch;
-				}
-				foreach ($remove_array as $sb_remove) {
-					$generationInd_tree[$branch][$sb_remove] = array();
-				}
-			}
-			*/
         } else {
             $generationInd_tree = array();
         }
 
-        //
-
-        //return array ($xrefInd, $xrefFam, $generationInd_tree);
         return $generationInd_tree;
-        //return array ($xrefInd, $xrefFam, $this->generationInd, $generationFam 
-        //);
     }
 
     /**
@@ -3979,7 +3582,6 @@ class ExportFamilyBookData extends AbstractModule
         $this->icon_resources = array();
         $this->icon_cache = array();
 
-
         foreach (array(
             "label", "description"
         ) as $a) {
@@ -4002,13 +3604,8 @@ class ExportFamilyBookData extends AbstractModule
             );
         }
 
-
-
         // get record of individuals and families
-        //list ( $xrefInd, $xrefFam ) = $this->getRecords ( $tree );
         $generationInd_tree = $this->getRecords(TRUE);
-        //list ( $xrefInd, $xrefFam, $this->generationInd ) = $this->getRecords (
-        //		$tree, TRUE );
 
         // Get header.
         // Buffer the output. Lots of small fwrite() calls can be very
@@ -4028,7 +3625,6 @@ class ExportFamilyBookData extends AbstractModule
 		 */
 
         // loop over all individuals
-        //foreach ( $xrefInd as $xref ) {
         // individuals of each exported sub branch, in the order of the export (see familyAtBranchEnd)
         $sub_branch_members = array();
         foreach ($generationInd_tree as $branch_array) {
@@ -4049,7 +3645,6 @@ class ExportFamilyBookData extends AbstractModule
         $sub_branch_no = 0;
         $no_of_branches = count($generationInd_tree);
         foreach ($generationInd_tree as $branch => $branch_array) {
-            //			$no_of_sub_branches = count($branch_array);
             $no_of_sub_branches = 0;
             foreach ($branch_array as $sub_branch_id => $sub_branch_array) {
                 if (key_exists($sub_branch_id, $seeds)) {
@@ -4091,13 +3686,10 @@ class ExportFamilyBookData extends AbstractModule
                             if ($has_sub_branch_link) {
                                 $link_xref_list[$xref] = true;
                             }
-                            //foreach ( $this->generationInd as $key => $row ) {
-                            //$FAMS = array_merge($FAMS, $value['spouse_family']);
                             foreach ($value['spouse_family'] as $family) {
                                 $xrefFam[$family->xref()] = $family->xref();
                             }
 
-                            //$record = Individual::getInstance($xref, $this->tree);
                             $record = Registry::individualFactory()->make($xref, $this->tree);
 
                             // get parameter for the export
@@ -4215,7 +3807,6 @@ class ExportFamilyBookData extends AbstractModule
                     foreach ($xrefFam as $xref) {
                         // increase time limit
                         $this->increaseTimeLimit();
-                        //$record = Family::getInstance($xref, $this->tree);
                         $record = Registry::familyFactory()->make($xref, $this->tree);
 
                         // no node (and no edges) where a branch ends and the family belongs to another branch
@@ -4311,14 +3902,9 @@ class ExportFamilyBookData extends AbstractModule
 				 * Create edges from families to individuals
 				 */
 
-
                     // loop over families
                     foreach ($xrefFam as $xref) {
-                        //foreach ( $FAMS as $row ) {
-                        //	$xref = $row->xref();
                         $node_id_fam = $xref . "_" . $sub_branch_no;
-                        //
-                        //$record = Family::getInstance($xref, $this->tree);
                         $record = Registry::familyFactory()->make($xref, $this->tree);
 
                         // get all parents
@@ -4449,7 +4035,6 @@ class ExportFamilyBookData extends AbstractModule
     private function exportLatex($gedout)
     {
 
-        // global $include_exclude_media;
         // get parameter entered in the web form
         $parameter = $_POST;
 
@@ -4523,12 +4108,9 @@ class ExportFamilyBookData extends AbstractModule
                     }
                 }
 
-                //$label = GedcomTag::getLabel($key);
-                //if (strlen($label) > 4 and substr($label, 0, 5) == '<span') {
                 if (is_null($label)) {
                     $buffer .= '\item[' . $symbol . '] ' . $key;
                 } else {
-                    //$buffer .= '\item[' . $symbol . '] ' . GedcomTag::getLabel($key);
                     $buffer .= '\item[' . $symbol . '] ' . $label;
                 }
             }
@@ -4544,11 +4126,7 @@ class ExportFamilyBookData extends AbstractModule
         $buffer .= $parameter["title"];
 
         // get record of individuals and families
-        //list ( $xrefInd, $xrefFam, $this->generationInd ) = $this->getRecords ( 
-        //		$tree, TRUE );
         $generationInd_tree = $this->getRecords(TRUE);
-        //list ( $xrefInd, $xrefFam, $this->generationInd, $generationFam ) = $this->getRecords (
-        //		$tree, TRUE );
 
         // get seeds
         $seeds = $this->getSeeds();
@@ -4561,13 +4139,8 @@ class ExportFamilyBookData extends AbstractModule
 		 */
 
         // loop over all individuals
-        //$last_branch = 0;
-        //$last_sub_branch = $this->generationInd[0]['sub_branch'];
-        //$one_branch = end($this->generationInd)['branch'] == reset($this->generationInd)['branch'];
-        //foreach ( $this->generationInd as $key => $value ) {
         $no_of_branches = count($generationInd_tree);
         foreach ($generationInd_tree as $branch => $branch_array) {
-            //$no_of_sub_branches = count($branch_array);
             $no_of_sub_branches = 0;
             foreach ($branch_array as $sub_branch_id => $sub_branch_array) {
                 if (key_exists($sub_branch_id, $seeds)) {
@@ -4604,9 +4177,6 @@ class ExportFamilyBookData extends AbstractModule
                     // summary section
                     if ($no_of_generations > 0 && sizeof($summary_template[0]) > 0) {
                         foreach ($sub_branch_array as $generation => $generation_array) {
-                            //if (count($generation_array) > 0) $buffer .= $hierarchy_generation .
-                            //($no_of_generations == 1 ? '' : " " . $generation) .
-                            //"}" . "\n";
 
                             foreach ($generation_array as $ind_id => $value) {
                                 $xref = $value['xref'];
@@ -4615,7 +4185,6 @@ class ExportFamilyBookData extends AbstractModule
 
                                 $name = $value['name'];
 
-                                //$record = Individual::getInstance($xref, $this->tree);
                                 $record = Registry::individualFactory()->make($xref, $this->tree);
 
                                 // get parameter for the export
@@ -4669,29 +4238,8 @@ class ExportFamilyBookData extends AbstractModule
                             // increase time limit
                             $this->increaseTimeLimit();
 
-                            //$branch = $value ['branch'];
-                            //$sub_branch = $value ['sub_branch'];
-                            //$generation = $value ['generation'];
                             $name = $value['name'];
-                            //$givenname = $value ['givenname'];
 
-                            /*
-						if ($branch > $last_branch) {
-							$buffer .= $parameter["hierarchy_branch"] .  
-							($one_branch ? '' : " " . $branch) . 
-							"}" . "\n";
-							$first_generation = $generation;
-							$last_generation = $generation - 1;
-							$last_branch = $branch;
-						}
-						
-						if ($generation > $last_generation) {
-							$buffer .= $parameter["hierarchy_generation"] . " " .
-									 ($generation - $first_generation + 1) . "}" . "\n";
-							$last_generation = $generation;
-						}*/
-
-                            //$record = Individual::getInstance($xref, $this->tree);
                             $record = Registry::individualFactory()->make($xref, $this->tree);
 
                             // get parameter for the export
