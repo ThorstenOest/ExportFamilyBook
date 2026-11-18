@@ -6,12 +6,14 @@
  * This file is included in the module.php file
  */
 
+namespace haduloha\ExportFamilyBook;
+
 use Fisharebest\Webtrees\Auth;
 use Fisharebest\Webtrees\Registry;
 use Fisharebest\Webtrees\I18N;
 use Fisharebest\Webtrees\Individual;
+use Fisharebest\Webtrees\Family;
 use Fisharebest\Webtrees\Date;
-use Fisharebest\Webtrees\Module\AbstractModule;
 use Fisharebest\Webtrees\DB;
 use Illuminate\Database\Query\Expression;
 use Fisharebest\Webtrees\GedcomRecord;
@@ -19,6 +21,9 @@ use Fisharebest\Webtrees\Gedcom;
 use Fisharebest\Webtrees\Media;
 use Fisharebest\Webtrees\Tree;
 use Fisharebest\Webtrees\Elements\UnknownElement;
+use RuntimeException;
+use Throwable;
+use WeakMap;
 
 /**
  * Error in a template or in the branch list that the user can correct in the form
@@ -31,9 +36,11 @@ class ExportFamilyBookTemplateException extends RuntimeException
 }
 
 /**
- * Main class for FamilyBookExport module
+ * The export of a tree as family book (LaTeX) or chart (GraphML)
+ *
+ * Gets its settings from the module (see ExportFamilyBook::exportData), reads no request data itself.
  */
-class ExportFamilyBookData extends AbstractModule
+class ExportFamilyBookData
 {
 
     // variables used in different functions 
@@ -1680,9 +1687,9 @@ class ExportFamilyBookData extends AbstractModule
     ) {
         if (!isset($this->media_included)) $this->media_included = array();
 
-        if ($record instanceof Fisharebest\Webtrees\Individual) {
+        if ($record instanceof Individual) {
             $FAMC = $this->childFamilies($record);
-        } else if ($record instanceof Fisharebest\Webtrees\Family) {
+        } else if ($record instanceof Family) {
             $FAMC = array($record);
         }
         /*
@@ -2285,7 +2292,7 @@ class ExportFamilyBookData extends AbstractModule
                             }
                             $n1 = count($media_links);
                             // add media from spouse family
-                            if ($record instanceof Fisharebest\Webtrees\Individual) {
+                            if ($record instanceof Individual) {
                                 // add media from facts
                                 foreach ($this->recordFacts($record) as $fact) {
                                     $OBJE = trim($fact->attribute('OBJE'), "@");

@@ -12,6 +12,8 @@
  * start individual; name; direction; stop individuals; heading of the branch; heading per generation; include/exclude
  */
 
+namespace haduloha\ExportFamilyBook;
+
 use Fisharebest\Webtrees\Auth;
 use Fisharebest\Webtrees\FlashMessages;
 use Fisharebest\Webtrees\Gedcom;
@@ -24,6 +26,8 @@ use Fisharebest\Webtrees\Validator;
 use League\Flysystem\FilesystemException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use JsonException;
+use UnexpectedValueException;
 
 trait ExportFamilyBookBranches
 {

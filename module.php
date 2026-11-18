@@ -5,6 +5,8 @@
  *
  */
 
+namespace haduloha\ExportFamilyBook;
+
 require_once __DIR__ . '/moduleExport.php';
 require_once __DIR__ . '/moduleBranches.php';
 require_once __DIR__ . '/moduleProfiles.php';
@@ -29,6 +31,9 @@ use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Http\Message\UploadedFileInterface;
 use League\Flysystem\FilesystemException;
+use JsonException;
+use RuntimeException;
+use UnexpectedValueException;
 
 /**
  * Main class for FamilyBookExport module
