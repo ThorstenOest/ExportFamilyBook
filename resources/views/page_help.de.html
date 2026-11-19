@@ -26,7 +26,7 @@
 <tr><td>Buch: Zusammenfassung am Anfang eines Zweigs</td><td>Template, wird am Anfang eines Zweigs auf jede Person angewendet (z. B. eine Liste der Personen, die zwei Zweige verbinden); darf leer bleiben</td></tr>
 <tr><td>Buch: Eintrag einer Person</td><td>Template für den Eintrag einer Person; Familien stehen darin mit <code>@ForeachFAMS@</code></td></tr>
 <tr><td>Buch: Liste der Symbole</td><td>Symbole für Faktenarten (<code>@FeFactType@</code>) und die Legende <code>\GedcomLegende</code></td></tr>
-<tr><td>Buch: Standard-Formate, Überschriften</td><td>Datums- und Ortsformat für Platzhalter ohne Formatangabe; LaTeX-Befehle für die Überschriften der Zweige und Generationen</td></tr>
+<tr><td>Buch: Standard-Formate, Überschriften</td><td>Datums- und Ortsformat für Platzhalter ohne Formatangabe; LaTeX-Befehle für die Überschriften der Zweige und Generationen (leeres Feld: keine Überschrift)</td></tr>
 <tr><td>Grafik: Text des Kästchens, Beschreibung des Kästchens</td><td>Templates für das Kästchen einer Person bzw. einen Familienknoten (Label: HTML, wenn es mit <code>&lt;html&gt;</code> beginnt)</td></tr>
 </table>
 <p>Die Datei des Buchs: Präambel, Legende, Quellenliste, Titel, dann je Zweig die Überschriften, die Zusammenfassung und die Einträge, zuletzt der Schluss des Dokuments.</p>
@@ -72,7 +72,7 @@ und <code>\textbf{Klein, Maria} \\</code> für eine Person ohne Daten.</p>
 <tr><td><code>@Link@</code></td><td>Name des anderen Zweigs einer Person, die zwei Zweige verbindet</td><td>–</td></tr>
 <tr><td><code>@LinkId@</code></td><td>nur Buch: Sprungmarke des Eintrags im anderen Zweig</td><td>wie <code>@Id@</code>: <code>\pageref{@LinkId&amp;xref@}</code></td></tr>
 <tr><td><code>@Portrait@</code></td><td>Dateiname des Portraits</td><td><code>fallback</code> oder <code>silhouette</code> (Standard-Portrait der Grafik)</td></tr>
-<tr><td><code>@PortraitSize@</code></td><td>andere Seite des Portraits in Pixeln</td><td><code>@PortraitSize&amp;w30&amp;20@</code>: Höhe zur Breite 30, 20 ohne Portrait</td></tr>
+<tr><td><code>@PortraitSize@</code></td><td>andere Seite des Portraits in Pixeln</td><td><code>@PortraitSize&amp;w30&amp;20@</code>: Höhe zur Breite 30, 20 ohne Portrait oder wenn seine Datei fehlt</td></tr>
 <tr><td><code>@PortraitIcon@</code></td><td>nur Grafik: Portrait als Bild im Kästchen</td><td><code>@PortraitIcon&amp;Breite&amp;top|left&amp;jpg|png&amp;Schärfe@</code>, z. B. <code>@PortraitIcon&amp;30&amp;left@</code></td></tr>
 <tr><td><code>@Gedcom@</code></td><td>GEDCOM des Datensatzes</td><td>–</td></tr>
 </table>

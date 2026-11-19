@@ -26,7 +26,7 @@
 <tr><td>Book: Summary at the beginning of a branch</td><td>template, applied to each individual at the beginning of a branch (e.g. a list of the individuals that connect two branches); may stay empty</td></tr>
 <tr><td>Book: Entry of an individual</td><td>template of the entry of an individual; families are written inside it with <code>@ForeachFAMS@</code></td></tr>
 <tr><td>Book: List of symbols</td><td>symbols for fact types (<code>@FeFactType@</code>) and the legend <code>\GedcomLegende</code></td></tr>
-<tr><td>Book: Default formats, Headings</td><td>date and place format for placeholders without format; LaTeX commands for the headings of branches and generations</td></tr>
+<tr><td>Book: Default formats, Headings</td><td>date and place format for placeholders without format; LaTeX commands for the headings of branches and generations (an empty field: no heading)</td></tr>
 <tr><td>Chart: Node label, Node description</td><td>templates of the box of an individual resp. of a family node (label: HTML if it starts with <code>&lt;html&gt;</code>)</td></tr>
 </table>
 <p>The file of the book: preamble, legend, list of sources, title, then per branch the headings, the summary and the entries, then the end of the document.</p>
@@ -72,7 +72,7 @@ and <code>\textbf{Klein, Maria} \\</code> for an individual without dates.</p>
 <tr><td><code>@Link@</code></td><td>name of the other branch of an individual that connects two branches</td><td>–</td></tr>
 <tr><td><code>@LinkId@</code></td><td>book only: label of the entry in the other branch</td><td>as <code>@Id@</code>: <code>\pageref{@LinkId&amp;xref@}</code></td></tr>
 <tr><td><code>@Portrait@</code></td><td>file name of the portrait</td><td><code>fallback</code> or <code>silhouette</code> (default portrait of the chart)</td></tr>
-<tr><td><code>@PortraitSize@</code></td><td>other side of the portrait in pixels</td><td><code>@PortraitSize&amp;w30&amp;20@</code>: height for width 30, 20 without portrait</td></tr>
+<tr><td><code>@PortraitSize@</code></td><td>other side of the portrait in pixels</td><td><code>@PortraitSize&amp;w30&amp;20@</code>: height for width 30, 20 without portrait or if its file is missing</td></tr>
 <tr><td><code>@PortraitIcon@</code></td><td>chart only: portrait as picture of the box</td><td><code>@PortraitIcon&amp;width&amp;top|left&amp;jpg|png&amp;sharpness@</code>, e.g. <code>@PortraitIcon&amp;30&amp;left@</code></td></tr>
 <tr><td><code>@Gedcom@</code></td><td>GEDCOM of the record</td><td>–</td></tr>
 </table>
