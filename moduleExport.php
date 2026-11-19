@@ -360,7 +360,8 @@ class ExportFamilyBookData
      *
      * @param Date $date        	
      * @param string $format
-     *        	A standard PHP date format.
+     *        	A standard PHP date format. Without format the default date format is used;
+     *        	without default date format the date format of webtrees for the language of the user.
      * @return string
      */
     private function formatDate($date, $format)
@@ -374,7 +375,8 @@ class ExportFamilyBookData
             $date_label = $this->cached(
                 $date,
                 'display|' . $format,
-                fn () => strip_tags($date->display($this->tree, $format, false))
+                // no format: null lets webtrees use its date format (I18N::dateFormat())
+                fn () => strip_tags($date->display($this->tree, $format ? $format : null, false))
             );
         } else {
             $date_label = "";
@@ -850,7 +852,8 @@ class ExportFamilyBookData
      * @param string $fact
      *        	The gedcom identifier of the fact, e.g. "OCCU"
      * @param string $format
-     *        	A list of positions in the ordered fact list which are returned
+     *        	A list of positions in the ordered fact list which are returned;
+     *        	without format all facts (empty values left out)
      * @return string A comma separted list of facts
      */
     private function getFact($record, $fact, $format = null)
@@ -860,9 +863,17 @@ class ExportFamilyBookData
         $Facts = $this->recordFacts($record, (array) $fact, true);
         if ($Facts) {
             if (empty($format)) {
-                // if $format is not given return all items
+                // if $format is not given return all items like the list of all positions:
+                // separated by ", ", a value only once, empty values left out
+                $fact_list = array();
                 foreach ($Facts as $Fact) {
-                    $fact_string .= $Fact->Value();
+                    $fact_value = trim($Fact->Value());
+                    if ($fact_value !== "" && !in_array($fact_value, $fact_list)) {
+                        if ($fact_string != "")
+                            $fact_string .= ", ";
+                        $fact_list[] = $fact_value;
+                        $fact_string .= $fact_value;
+                    }
                 }
             } else {
                 // selects the items from the fact array as defined

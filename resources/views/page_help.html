@@ -44,7 +44,7 @@ if they have data, but do not count as data for the block around them.</li>
 <li><b>Line breaks</b> of the template become spaces. Write <code>\\</code> (LaTeX) or <code>&lt;br&gt;</code> (HTML) for a line break.</li>
 <li>A <b>loop</b> repeats its text: <code>@ForeachFAMS@ ... @EndForeach@</code>. A pass without data is left out.
 Do not make the body of a loop one single block: write a space before it.</li>
-<li>A date without format uses the default date format; <b>without a default (always in the chart) it is empty</b>.</li>
+<li>A date without format uses the default date format; without a default (always in the chart) it is written as webtrees shows it, e.g. <code>March 3, 1850</code>. A missing date stays empty.</li>
 <li>Data are masked for LaTeX (<code>&amp;</code>, <code>%</code>, <code>_</code>, ...) resp. HTML; the text of the templates is not.</li>
 </ul>
 
@@ -64,7 +64,7 @@ and <code>\textbf{Klein, Maria} \\</code> for an individual without dates.</p>
 <tr><td><code>@SurName@</code>, <code>@NickName@</code></td><td>surname, nickname</td><td>–</td></tr>
 <tr><td><code>@BirthDate@</code>, <code>@DeathDate@</code></td><td>date of birth, death</td><td>date format: <code>@BirthDate&amp;%Y@</code> → 1850, <code>%j.%n.%Y</code> → 3.3.1850</td></tr>
 <tr><td><code>@BirthPlace@</code>, <code>@DeathPlace@</code></td><td>place of birth, death</td><td>positions, <code>-1</code> = last, <code>/name</code> leaves the name out: <code>@BirthPlace&amp;1,-1/Deutschland@</code> → Musterstadt</td></tr>
-<tr><td><code>@FactOCCU@</code> (any tag)</td><td>value of the facts with this tag</td><td>positions in the list by date: <code>@FactOCCU&amp;-1@</code> → the last occupation; without format the values are glued together</td></tr>
+<tr><td><code>@FactOCCU@</code> (any tag)</td><td>value of the facts with this tag</td><td>positions in the list by date: <code>@FactOCCU&amp;-1@</code> → the last occupation; without format all values, separated by <code>, </code></td></tr>
 <tr><td><code>@Id@</code></td><td>number of the individual</td><td><code>gen_no</code> (default), <code>no</code> or <code>xref</code>: <code>\label{@Id&amp;xref@}</code></td></tr>
 <tr><td><code>@FatherGivenName@</code>, <code>@FatherSurName@</code>, <code>@FatherId@</code>, <code>@MotherGivenName@</code>, <code>@MotherSurName@</code>, <code>@MotherId@</code></td><td>father, mother (in <code>@ForeachFAMC@</code> of that family)</td><td>as <code>@GivenName@</code> resp. <code>@Id@</code></td></tr>
 <tr><td><code>@Reference@</code></td><td>relationship to the reference individual, with the reference symbols</td><td>–</td></tr>
