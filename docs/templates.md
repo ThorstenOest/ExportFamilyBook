@@ -387,8 +387,10 @@ The format is a date format of webtrees, with `%` before each letter. Frequent l
 - webtrees writes only the parts that are known: a year alone stays a year, whatever the format.
 - Qualifiers (`about`, `before`, ...) and the names of months are written in the language of the user who
   exports (the examples were exported in English).
-- **A date without format uses the *Default date format*. If there is none, the date is empty.** The chart has no
-  default date format, so always give a format there (e.g. `@BirthDate&%Y@`).
+- **A date without format uses the *Default date format*.** If there is none (always in the chart, in the book
+  when the field is empty), the date is written as webtrees shows it in the language of the user who exports, e.g.
+  `March 3, 1850`, `about 1852` (English) or `3. März 1850`, `um 1852` (German). A missing date stays empty, so a
+  block with it is left out.
 
 ### Places
 
@@ -422,10 +424,10 @@ by date: `1` is the first, `-1` the last. Each value is written once, the values
 | `-1` | `Teacher` | `Blacksmith` |
 | `1,2` | `Seamstress, Teacher` | `Blacksmith` |
 | `2,1` | `Teacher, Seamstress` | `Blacksmith` |
-| (none) | `SeamstressTeacher` | `Blacksmith` |
+| (none) | `Seamstress, Teacher` | `Blacksmith` |
 
-Without format all values are written **without separator**; give a list of positions (e.g. `1,2,3`) or use a
-[fact loop](#fact-loops) if an individual can have several facts of the tag.
+Without format all values are written like a list of all positions: sorted by date, each value once, joined with
+`, `; facts without value are left out. Use a [fact loop](#fact-loops) for the date or place of each fact.
 
 ### Numbers of the individuals
 
@@ -742,7 +744,7 @@ unless it is Germany. Set the format you use most as *Default place format* (boo
 
 ### The occupation
 
-All occupations: `<@FactOCCU&1,2,3@>` → Anna: `Seamstress, Teacher`. The last one only (e.g. for the chart):
+All occupations: `@FactOCCU@` → Anna: `Seamstress, Teacher`. The last one only (e.g. for the chart):
 `@FactOCCU&-1@` → `Teacher`. With date and place, use the fact loops:
 
 ```
@@ -825,10 +827,9 @@ Other mistakes give no message, but a wrong result:
 |---|---|
 | A block is cut off, a `>` or `}` appears in the output | the closing bracket is also used in the text, e.g. `< -> @Link@>` in the book: the `>` of `->` ends the block. Choose other brackets in the first four characters or avoid the character. |
 | An `@` in the text breaks the template | `@` starts a placeholder; there is no way to write it as text. Choose another placeholder character in the first four characters. |
-| Dates are empty in the chart | a date without format and no *Default date format* (the chart has none): write `@BirthDate&%Y@`. |
+| Dates in the chart are long (`March 3, 1850`) | a date without format and no *Default date format* (the chart has none): give a format, e.g. `@BirthDate&%Y@`. |
 | A loop writes nothing | the body of the loop is one single block, e.g. `@ForeachFAMS@<...>@EndForeach@`: add a space before the block. Or the pass has no data: `@FeFactType@` alone is no data. |
 | A text appears although the value is missing | the text is not in the same block as the placeholder. |
-| Several values are glued together (`SeamstressTeacher`) | `@FactXXXX@` without format: give positions, e.g. `@FactOCCU&1,2@`. |
 | `@PortraitSize@` gives the value for an individual without portrait, although there is a portrait | the file of the portrait is missing in the media folder of webtrees on the server, or it is no picture. |
 | A line break of the template is missing | line breaks become spaces: write `\\` (LaTeX) or `<br>` (HTML). |
 | A picture is missing in the book | see the README, [Pictures that are skipped](../README.md#pictures-that-are-skipped). |

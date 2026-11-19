@@ -44,7 +44,7 @@ geschrieben, wenn sie Daten haben, zählen aber für den umgebenden Block nicht 
 <li><b>Zeilenumbrüche</b> im Template werden zu Leerzeichen. Für einen Zeilenumbruch <code>\\</code> (LaTeX) oder <code>&lt;br&gt;</code> (HTML) schreiben.</li>
 <li>Eine <b>Schleife</b> wiederholt ihren Text: <code>@ForeachFAMS@ ... @EndForeach@</code>. Ein Durchlauf ohne Daten entfällt.
 Der Inhalt einer Schleife darf nicht nur aus einem einzigen Block bestehen: ein Leerzeichen davor schreiben.</li>
-<li>Ein Datum ohne Formatangabe nutzt das Standard-Datumsformat; <b>ohne Standard (in der Grafik immer) bleibt es leer</b>.</li>
+<li>Ein Datum ohne Formatangabe nutzt das Standard-Datumsformat; ohne Standard (in der Grafik immer) wird es so geschrieben, wie webtrees es anzeigt, z. B. <code>3. März 1850</code>. Ein fehlendes Datum bleibt leer.</li>
 <li>Daten werden für LaTeX (<code>&amp;</code>, <code>%</code>, <code>_</code>, …) bzw. HTML maskiert, der Text der Templates nicht.</li>
 </ul>
 
@@ -64,7 +64,7 @@ und <code>\textbf{Klein, Maria} \\</code> für eine Person ohne Daten.</p>
 <tr><td><code>@SurName@</code>, <code>@NickName@</code></td><td>Nachname, Rufname</td><td>–</td></tr>
 <tr><td><code>@BirthDate@</code>, <code>@DeathDate@</code></td><td>Geburts-, Sterbedatum</td><td>Datumsformat: <code>@BirthDate&amp;%Y@</code> → 1850, <code>%j.%n.%Y</code> → 3.3.1850</td></tr>
 <tr><td><code>@BirthPlace@</code>, <code>@DeathPlace@</code></td><td>Geburts-, Sterbeort</td><td>Positionen, <code>-1</code> = letzte, <code>/Name</code> lässt den Namen weg: <code>@BirthPlace&amp;1,-1/Deutschland@</code> → Musterstadt</td></tr>
-<tr><td><code>@FactOCCU@</code> (jedes Tag)</td><td>Wert der Fakten mit diesem Tag</td><td>Positionen in der Liste nach Datum: <code>@FactOCCU&amp;-1@</code> → der letzte Beruf; ohne Formatangabe werden die Werte aneinandergeklebt</td></tr>
+<tr><td><code>@FactOCCU@</code> (jedes Tag)</td><td>Wert der Fakten mit diesem Tag</td><td>Positionen in der Liste nach Datum: <code>@FactOCCU&amp;-1@</code> → der letzte Beruf; ohne Formatangabe alle Werte, getrennt durch <code>, </code></td></tr>
 <tr><td><code>@Id@</code></td><td>Nummer der Person</td><td><code>gen_no</code> (Standard), <code>no</code> oder <code>xref</code>: <code>\label{@Id&amp;xref@}</code></td></tr>
 <tr><td><code>@FatherGivenName@</code>, <code>@FatherSurName@</code>, <code>@FatherId@</code>, <code>@MotherGivenName@</code>, <code>@MotherSurName@</code>, <code>@MotherId@</code></td><td>Vater, Mutter (in <code>@ForeachFAMC@</code> die dieser Familie)</td><td>wie <code>@GivenName@</code> bzw. <code>@Id@</code></td></tr>
 <tr><td><code>@Reference@</code></td><td>Verwandtschaft zur Bezugsperson, mit den Symbolen für die Verwandtschaft</td><td>–</td></tr>
