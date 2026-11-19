@@ -809,10 +809,15 @@ class ExportFamilyBookData
         $portrait_file = $this->getPortrait($record, "", true);
         $image_length = $format_default;
 
-        if ($portrait_file != "" && strlen($format_Size) > 1) {
+        // a missing file or a file that is no picture: as an individual without portrait (default value)
+        $image_size = false;
+        if ($portrait_file != "" && strlen($format_Size) > 1 && is_file($portrait_file)) {
+            $image_size = @getimagesize($portrait_file);
+        }
+
+        if ($image_size !== false) {
             $constraint = $format_Size[0];
             $size_constraint = (float) substr($format_Size, 1);
-            $image_size = getimagesize($portrait_file);
             $width = $image_size[0];
             $height = $image_size[1];
 
@@ -2016,7 +2021,8 @@ class ExportFamilyBookData
                             // get Note fact
                             $n = $record->attribute('NOTE');
                             if ($n !== "") {
-                                $tag_replacement .= $this->substituteSpecialCharacters($n, $doctype) . '\\ ';
+                                // followed by a LaTeX space ("\ ") in LaTeX only
+                                $tag_replacement .= $this->substituteSpecialCharacters($n, $doctype) . ($doctype === "latex" ? '\\ ' : '');
                             }
                             break;
                         case "FeMediaFile":
@@ -3606,7 +3612,7 @@ class ExportFamilyBookData
             // This is done once and later used when exporting
             // data for the familty tree record.
             $template_fam[$a] = array();
-            list($template_fam[$a][0], $brackets[$a]) = $this->splitTemplate(
+            list($template_fam[$a][0], $brackets_fam[$a]) = $this->splitTemplate(
                 $parameter[$name]
             );
         }
@@ -3834,7 +3840,7 @@ class ExportFamilyBookData
                                 '',
                                 $template_fam[$a],
                                 "graphml",
-                                $brackets[$a]
+                                $brackets_fam[$a]
                             )[0];
                         }
                         // text lines of the label as shown by yEd (without HTML tags)
@@ -4177,7 +4183,8 @@ class ExportFamilyBookData
                     if ($hierarchy_sub_branch === "") $hierarchy_sub_branch = $parameter["hierarchy_sub_branch"];
                     if ($hierarchy_generation === "") $hierarchy_generation = $parameter["hierarchy_generation"];
                     $section_text = $seeds[$sub_branch_id]["name"];
-                    if ($no_of_generations > 0) $buffer .= $hierarchy_sub_branch .
+                    // an empty field: no heading (instead of a single "}")
+                    if ($no_of_generations > 0 && trim($hierarchy_sub_branch) !== "") $buffer .= $hierarchy_sub_branch .
                         ($no_of_sub_branches == 1 ? '' : " " . $section_text) .
                         "}" . "\n";
 
@@ -4235,7 +4242,7 @@ class ExportFamilyBookData
 
                     // generation sections
                     foreach ($sub_branch_array as $generation => $generation_array) {
-                        if (count($generation_array) > 0) $buffer .=
+                        if (count($generation_array) > 0 && trim($hierarchy_generation) !== "") $buffer .=
                             $hierarchy_generation .
                             ($no_of_generations == 1 ? '' : " " . $generation) .
                             "}" . "\n";

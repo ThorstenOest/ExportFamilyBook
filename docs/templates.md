@@ -151,8 +151,7 @@ The **headings** are LaTeX commands that the export completes:
   ` <number of the generation>}`, or only `}` if the branch has only one generation. A branch can have its own
   value (column 6 of the list).
 
-These headings are written even if the field is empty (then only `}` remains), so keep a value in
-`hierarchy_sub_branch` and `hierarchy_generation`.
+An empty field writes no heading at all. A branch without headings of its own uses the fields of the form.
 
 ### Chart (GraphML)
 
@@ -555,7 +554,7 @@ Inside `@ForeachFactInner@` (the record is the fact):
 | `@FeFactValue@` | the value of the fact; for an adoption (`ADOP`) by whom (`stepparents`, ...) | – | `Teacher` |
 | `@FeFactDate@` | the date of the fact | date format | `1880` |
 | `@FeFactPlace@` | the place of the fact | place format | `Neustadt` |
-| `@FeFactNote@` | the note of the fact (`2 NOTE`), followed by `\ ` (a LaTeX space) | – | `Village school\ ` |
+| `@FeFactNote@` | the note of the fact (`2 NOTE`); in the book followed by `\ ` (a LaTeX space) | – | `Village school\ ` (book), `Village school` (chart) |
 | `@ForeachAttributeOuter@` | loop over the given attributes of the fact | `TAG1,TAG2,...`, e.g. `AGNC,ADDR,PHON,CAUS,TYPE,AGE` | |
 
 Inside `@ForeachAttributeOuter@`:
@@ -688,8 +687,9 @@ picture; `@Portrait&fallback@` gives the default portrait). This does not change
 (`@ForeachMedia@`) nor the list of excluded pictures of the image selection.
 
 `@PortraitSize@` reads the picture from the media folder below the folder of webtrees on the server
-(`<webtrees>/data/media/`); if the picture is missing there, the export stops with an error (see
-[Common errors](#common-errors)). For the chart, `@PortraitIcon@` is the better choice: it puts the picture into
+(`<webtrees>/data/media/`). If the file is missing there or is no picture, `@PortraitSize@` gives the value for an
+individual without portrait; `@Portrait@` still gives the file name, `@PortraitIcon@` puts no picture into the box.
+For the chart, `@PortraitIcon@` is the better choice: it puts the picture into
 the file (see the README, [Portraits in the family tree chart](../README.md#portraits-in-the-family-tree-chart)).
 
 ## Special characters
@@ -829,7 +829,7 @@ Other mistakes give no message, but a wrong result:
 | A loop writes nothing | the body of the loop is one single block, e.g. `@ForeachFAMS@<...>@EndForeach@`: add a space before the block. Or the pass has no data: `@FeFactType@` alone is no data. |
 | A text appears although the value is missing | the text is not in the same block as the placeholder. |
 | Several values are glued together (`SeamstressTeacher`) | `@FactXXXX@` without format: give positions, e.g. `@FactOCCU&1,2@`. |
-| The export stops with a PHP error about `getimagesize` | `@PortraitSize@` with a portrait that is not in the media folder of webtrees on the server. |
+| `@PortraitSize@` gives the value for an individual without portrait, although there is a portrait | the file of the portrait is missing in the media folder of webtrees on the server, or it is no picture. |
 | A line break of the template is missing | line breaks become spaces: write `\\` (LaTeX) or `<br>` (HTML). |
 | A picture is missing in the book | see the README, [Pictures that are skipped](../README.md#pictures-that-are-skipped). |
 
