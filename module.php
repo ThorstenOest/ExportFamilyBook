@@ -47,7 +47,7 @@ class ExportFamilyBook extends AbstractModule implements ModuleCustomInterface, 
 
     // Metadata shown in Control panel > Modules (see customModule...). The version of a release is set
     // here and in latest-version.txt; "-dev" marks a state between releases.
-    private const CUSTOM_VERSION = '3.0.0-dev';
+    private const CUSTOM_VERSION = '3.0.0';
     private const AUTHOR_NAME = 'ThorstenOest';
     private const GITHUB_REPOSITORY = 'ThorstenOest/ExportFamilyBook';
 
